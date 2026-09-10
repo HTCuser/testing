@@ -36,25 +36,58 @@ cứu được.
 
 ## Cài đặt và chạy
 
-Yêu cầu: Python 3.10 trở lên.
+Yêu cầu duy nhất: **Python 3.10 trở lên**. Không cần Node.js, không cần database server,
+không cần khoá API.
+
+### Windows
+
+Cài Python tại <https://www.python.org/downloads/> — khi cài **nhớ tích ô "Add python.exe to PATH"**.
+Sau đó nháy đúp vào `run.bat`, hoặc chạy trong Command Prompt:
+
+```bat
+cd C:\duong\dan\toi\testing
+run.bat
+```
+
+### Linux / macOS
 
 ```bash
-git clone <repo> && cd testing
+cd /duong/dan/toi/testing
 ./run.sh
 ```
 
-Mở trình duyệt tại <http://localhost:8000>.
+Lần chạy đầu mất vài phút để tải thư viện và nạp dữ liệu mẫu. Khi thấy dòng
+`Application startup complete`, mở trình duyệt tại <http://localhost:8000>.
+Các lần sau khởi động chỉ mất vài giây.
 
-Chạy thủ công nếu không dùng `run.sh`:
+Nhấn `Ctrl + C` trong cửa sổ lệnh để dừng máy chủ.
+
+### Chạy thủ công (nếu không dùng script)
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate           # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-python -m backend.seed          # nạp dữ liệu mẫu Hủa Na (tuỳ chọn)
-uvicorn backend.main:app --host 0.0.0.0 --port 8000
+python -m backend.seed              # nạp dữ liệu mẫu Hủa Na (tuỳ chọn)
+python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
 ```
 
 Tài liệu API tự sinh: <http://localhost:8000/docs>
+
+### Xử lý sự cố khi cài đặt
+
+| Hiện tượng | Cách xử lý |
+|---|---|
+| `Tải thư viện thất bại` / `ReadTimeoutError` | Mạng chậm hoặc bị chặn. Chạy lại script — các gói đã tải xong được dùng lại nên lần sau nhanh hơn. Nếu qua proxy: `set HTTPS_PROXY=http://<proxy>:<cổng>` (Windows) hoặc `export HTTPS_PROXY=...` (Linux) |
+| `Address already in use` / cổng 8000 bận | Đổi cổng: `set PORT=8080` rồi chạy lại (Linux: `PORT=8080 ./run.sh`) |
+| Windows hỏi cho phép qua tường lửa | Chọn **Allow** nếu muốn máy khác trong mạng nhà máy truy cập được; chọn Cancel nếu chỉ dùng trên máy này |
+| Muốn nạp lại dữ liệu mẫu từ đầu | Xoá tệp `data/huana.db` rồi chạy lại script |
+
+### Cho máy khác trong mạng nhà máy truy cập
+
+Máy chủ đã lắng nghe trên mọi địa chỉ mạng. Xem IP của máy đang chạy
+(`ipconfig` trên Windows, `ip a` trên Linux) rồi trên máy khác mở
+`http://<IP-máy-chủ>:8000`, ví dụ `http://192.168.1.50:8000`.
 
 ### Cấu hình
 
