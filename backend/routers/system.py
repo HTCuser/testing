@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from .. import config
+from .. import config, usage
 from ..db import query, query_one, rows_to_dicts
-from ..rag import embeddings
+from ..rag import embeddings, indexer
 from ..rag.index import index
 
 router = APIRouter(prefix="/api", tags=["Hệ thống"])
@@ -78,12 +78,16 @@ def runtime_config() -> dict:
         "generation": {
             "enabled": config.generation_enabled(),
             "model": config.ANTHROPIC_MODEL if config.generation_enabled() else "",
+            "quota": usage.status(),
         },
         "embeddings": {
             "enabled": config.embeddings_enabled(),
             "provider": config.EMBEDDING_PROVIDER,
             "model": embeddings.model_name(),
             "indexed_vectors": _count("embeddings"),
+            # Truy hồi tự lùi về BM25 khi gọi hỏng, nên phải thử thật mới biết
+            # dịch vụ embedding có đang chạy hay không.
+            "reachable": embeddings.probe(),
         },
         "retrieval": {
             "chunk_size": config.CHUNK_SIZE,
@@ -101,4 +105,7 @@ def runtime_config() -> dict:
 @router.post("/reindex")
 def reindex_all() -> dict:
     index.rebuild()
-    return {"indexed_chunks": index.size}
+    # Dựng lại chỉ mục phải sinh luôn vector, nếu không thì bật embedding trên
+    # thư viện đã nạp sẽ không có vector nào và tìm kiếm ngữ nghĩa im lặng không chạy.
+    embedded = indexer.embed_all_documents()
+    return {"indexed_chunks": index.size, **embedded}

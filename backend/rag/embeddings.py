@@ -25,6 +25,21 @@ def model_name() -> str:
     return ""
 
 
+def probe() -> dict:
+    """Thử gọi một lần để biết dịch vụ embedding có thật sự dùng được không.
+
+    Truy hồi tự lùi về BM25 khi gọi hỏng, nên không có bước kiểm tra này thì
+    vận hành viên tưởng đang chạy ngữ nghĩa trong khi thực tế không phải.
+    """
+    if not config.embeddings_enabled():
+        return {"ok": False, "reason": "Chưa bật embedding trong cấu hình."}
+    try:
+        vector = embed(["kiểm tra kết nối"], is_query=True)[0]
+    except Exception as exc:
+        return {"ok": False, "reason": f"{exc.__class__.__name__}: {exc}"}
+    return {"ok": True, "dimensions": len(vector), "reason": ""}
+
+
 def embed(texts: list[str], *, is_query: bool = False) -> list[list[float]]:
     if not texts:
         return []

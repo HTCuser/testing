@@ -4,7 +4,7 @@ import time
 
 from fastapi import APIRouter
 
-from .. import config
+from .. import config, usage
 from ..db import dump_json, execute, query, rows_to_dicts
 from ..models import AskIn
 from ..rag.generator import answer
@@ -41,7 +41,14 @@ def ask(payload: AskIn) -> dict:
         equipment_id=payload.equipment_id,
         source_kind=payload.source_kind or None,
     )
-    text, mode = answer(payload.question, hits)
+    quota_reason = ""
+    if hits and config.generation_enabled():
+        _, quota_reason = usage.check()
+
+    text, mode = answer(payload.question, hits, quota_reason=quota_reason)
+    if mode == "claude":
+        usage.record()
+
     latency_ms = int((time.perf_counter() - started) * 1000)
     sources = [_serialize(h, i) for i, h in enumerate(hits, start=1)]
 
@@ -56,6 +63,7 @@ def ask(payload: AskIn) -> dict:
         "sources": sources,
         "latency_ms": latency_ms,
         "generation_enabled": config.generation_enabled(),
+        "quota": usage.status(),
     }
 
 

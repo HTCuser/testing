@@ -141,6 +141,16 @@ CREATE TABLE IF NOT EXISTS chat_logs (
     latency_ms    INTEGER NOT NULL DEFAULT 0,
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Đếm số lượt đã gọi mô hình sinh, tách theo ngày và theo tháng. Đếm riêng ở
+-- đây thay vì đếm lại chat_logs để hạn mức không bị reset khi xoá nhật ký và
+-- để mỗi lần kiểm tra chỉ đọc một dòng.
+CREATE TABLE IF NOT EXISTS ask_usage (
+    period_kind   TEXT NOT NULL,
+    period_key    TEXT NOT NULL,
+    used          INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (period_kind, period_key)
+);
 """
 
 

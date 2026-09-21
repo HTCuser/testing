@@ -70,6 +70,26 @@ def _replace_chunks(document_id: int, rows: list[tuple]) -> None:
     index.rebuild()
 
 
+def embed_all_documents() -> dict:
+    """Sinh vector cho toàn bộ tài liệu đã có trong thư viện.
+
+    Cần thiết khi bật embedding trên thư viện đã nạp từ trước: lúc nạp tài liệu
+    embedding còn tắt nên không có vector nào, và dựng lại chỉ mục chỉ dựng lại
+    nhánh BM25.
+    """
+    if not config.embeddings_enabled():
+        return {"embedded_documents": 0, "vectors": 0, "reason": "Chưa bật embedding."}
+    rows = query("SELECT DISTINCT document_id FROM chunks")
+    for row in rows:
+        _embed_document(row["document_id"])
+    total = query_one("SELECT COUNT(*) AS n FROM embeddings")
+    return {
+        "embedded_documents": len(rows),
+        "vectors": total["n"] if total else 0,
+        "reason": "",
+    }
+
+
 def _embed_document(document_id: int) -> None:
     if not config.embeddings_enabled():
         return

@@ -42,14 +42,26 @@ def build_context(hits: list[Hit]) -> str:
     return "\n\n".join(blocks)
 
 
-def answer(question: str, hits: list[Hit]) -> tuple[str, str]:
-    """Trả về (nội dung trả lời, chế độ)."""
+def answer(
+    question: str, hits: list[Hit], *, quota_reason: str = ""
+) -> tuple[str, str]:
+    """Trả về (nội dung trả lời, chế độ).
+
+    quota_reason khác rỗng nghĩa là đã hết hạn mức: vẫn trả về tài liệu truy hồi
+    được, chỉ không tổng hợp thành câu trả lời.
+    """
     if not hits:
         return (
             "Chưa tìm thấy tài liệu nào liên quan tới câu hỏi này trong thư viện kỹ thuật.\n\n"
             "Gợi ý: kiểm tra lại từ khoá, hoặc tải bổ sung tài liệu/quy trình liên quan vào mục "
             "**Thư viện kỹ thuật**.",
             "khong_co_ket_qua",
+        )
+    if quota_reason:
+        return (
+            _extractive(hits) + f"\n\n> _{quota_reason} "
+            "Các đoạn tài liệu liên quan vẫn được liệt kê đầy đủ ở trên._",
+            "het_han_muc",
         )
     if not config.generation_enabled():
         return _extractive(hits), "trich_luoc"

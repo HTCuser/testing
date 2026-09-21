@@ -42,9 +42,15 @@ export async function render(root) {
             <dl class="kv" style="grid-template-columns:150px 1fr">
               <dt>Mô hình</dt><dd class="mono">${esc(config.generation.model)}</dd>
             </dl>
+            <div class="section-title">Hạn mức tra cứu</div>
+            <div style="display:flex;flex-direction:column;gap:12px">
+              ${quotaBar('Hôm nay', config.generation.quota.day)}
+              ${quotaBar('Tháng này', config.generation.quota.month)}
+            </div>
             <div class="callout callout-info" style="margin-top:14px">
               Trợ lý tổng hợp câu trả lời từ các đoạn tài liệu truy hồi được và luôn kèm trích dẫn nguồn.
-              Mô hình được ràng buộc chỉ trả lời dựa trên tài liệu, không tự suy diễn thông số kỹ thuật.
+              Hết hạn mức thì tra cứu vẫn chạy, chỉ trả về các đoạn tài liệu liên quan thay vì câu trả lời
+              tổng hợp — không khoá công cụ giữa ca trực.
             </div>`
           : `
             <p style="margin:0 0 12px;line-height:1.7">
@@ -69,8 +75,13 @@ export async function render(root) {
               : 'BM25 từ khoá (unigram + bigram tiếng Việt)'}</dd>
             <dt>Embedding</dt>
             <dd>${config.embeddings.enabled
-              ? `<span class="badge badge-green">${esc(config.embeddings.model)}</span>
-                 <div class="text-muted" style="margin-top:5px">${config.embeddings.indexed_vectors} vector đã lưu</div>`
+              ? `<span class="badge badge-${config.embeddings.reachable.ok ? 'green' : 'red'}">
+                   ${esc(config.embeddings.model)}</span>
+                 <div class="text-muted" style="margin-top:5px">
+                   ${config.embeddings.reachable.ok
+                     ? `Đang chạy, ${config.embeddings.reachable.dimensions} chiều —
+                        ${config.embeddings.indexed_vectors} vector đã lưu`
+                     : 'Không kết nối được, truy hồi đang chạy bằng BM25'}</div>`
               : '<span class="badge badge-grey">Tắt — chạy hoàn toàn offline</span>'}</dd>
             <dt>Kích thước đoạn</dt><dd>${config.retrieval.chunk_size} ký tự</dd>
             <dt>Độ chồng lấn</dt><dd>${config.retrieval.chunk_overlap} ký tự</dd>
@@ -78,11 +89,26 @@ export async function render(root) {
             <dt>Tổng đoạn chỉ mục</dt>
             <dd><b>${Number(config.retrieval.indexed_chunks).toLocaleString('vi-VN')}</b></dd>
           </dl>
-          <div class="callout callout-info" style="margin-top:14px">
-            Không bật embedding thì hệ thống vẫn dùng được đầy đủ: BM25 có bigram xử lý khá tốt từ ghép
-            tiếng Việt như "kích từ", "gối trục", "máy cắt". Bật thêm embedding sẽ giúp tìm được cả những
-            đoạn diễn đạt khác từ nhưng cùng ý.
-          </div>
+          ${config.embeddings.enabled && !config.embeddings.reachable.ok ? `
+            <div class="callout callout-danger" style="margin-top:14px">
+              <b>Không kết nối được dịch vụ embedding.</b>
+              Truy hồi đang chạy bằng BM25 từ khoá, vẫn dùng được nhưng không tìm được
+              những đoạn diễn đạt khác từ mà cùng ý.
+              <div class="text-muted" style="margin-top:6px">
+                Kiểm tra Ollama đã chạy chưa và đã tải mô hình chưa:
+                <code>ollama pull ${esc(config.embeddings.model.replace(/^openai:/, ''))}</code>
+              </div>
+              <div class="text-muted" style="margin-top:4px">
+                Chi tiết: <code>${esc(config.embeddings.reachable.reason)}</code>
+              </div>
+            </div>`
+          : `
+            <div class="callout callout-info" style="margin-top:14px">
+              BM25 có bigram xử lý khá tốt từ ghép tiếng Việt như "kích từ", "gối trục", "máy cắt".
+              Nhánh ngữ nghĩa bổ sung thêm khả năng tìm những đoạn diễn đạt khác từ nhưng cùng ý.
+              Sau khi bật hoặc đổi mô hình embedding, bấm <b>Dựng lại chỉ mục</b> để sinh vector
+              cho tài liệu đã có.
+            </div>`}
         </section>
 
         <section class="card">
@@ -166,6 +192,21 @@ const CATEGORY_LABELS = {
   bieu_mau: 'Biểu mẫu, phiếu',
   khac: 'Khác',
 };
+
+function quotaBar(label, q) {
+  const pct = q.limit ? Math.min(100, (q.used / q.limit) * 100) : 0;
+  const tone = pct >= 100 ? 'red' : pct >= 80 ? 'amber' : 'teal';
+  return `
+    <div>
+      <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px">
+        <span>${esc(label)}</span>
+        <span><b>${q.used}</b> / ${q.limit} lượt — còn ${q.remaining}</span>
+      </div>
+      <div style="height:7px;border-radius:4px;background:var(--bg);overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:var(--${tone});border-radius:4px"></div>
+      </div>
+    </div>`;
+}
 
 function categoryBars(byCategory) {
   const entries = Object.entries(byCategory);

@@ -95,13 +95,37 @@ Sao chép `.env.example` thành `.env` và điền các giá trị cần thiết
 không cần bất kỳ khoá API nào** — khi đó tra cứu dùng BM25 chạy hoàn toàn offline và trả về các đoạn
 tài liệu liên quan nhất thay vì câu trả lời tổng hợp.
 
-| Biến | Tác dụng khi bật |
-|---|---|
-| `ANTHROPIC_API_KEY` | Trợ lý tổng hợp câu trả lời mạch lạc từ các đoạn truy hồi, kèm trích dẫn `[1] [2]` |
-| `EMBEDDING_PROVIDER` + khoá tương ứng | Thêm nhánh tìm kiếm ngữ nghĩa, tìm được cả đoạn diễn đạt khác từ nhưng cùng ý |
+Hệ thống gồm hai phân hệ cấu hình độc lập.
 
-Hỗ trợ embedding: `voyage` (khuyến nghị cho tiếng Việt) hoặc `openai_compatible` (dùng được với
-Ollama, LM Studio, vLLM chạy nội bộ — phù hợp khi nhà máy không cho dữ liệu ra ngoài).
+### Phân hệ 1 — Truy hồi tài liệu (bge-m3, chạy nội bộ)
+
+Mặc định dùng **bge-m3** qua Ollama, xử lý tiếng Việt tốt và **tài liệu không ra khỏi mạng
+nhà máy**. Cài đặt:
+
+```bash
+# Cài Ollama tại https://ollama.com rồi tải mô hình
+ollama pull bge-m3
+```
+
+Chạy lần đầu hoặc sau khi đổi mô hình embedding, bấm **Dựng lại chỉ mục** trên trang Cấu hình
+để sinh vector cho tài liệu đã có.
+
+Ollama không chạy thì truy hồi **tự lùi về BM25** — hệ thống vẫn dùng được, trang Cấu hình báo
+đỏ kèm lý do. Muốn tắt hẳn nhánh ngữ nghĩa: đặt `EMBEDDING_PROVIDER=none`.
+
+### Phân hệ 2 — Sinh câu trả lời (Claude Haiku 4.5)
+
+| Biến | Mặc định | Tác dụng |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | trống | Không có thì chỉ trả về đoạn tài liệu, không tổng hợp câu trả lời |
+| `ANTHROPIC_MODEL` | `claude-haiku-4-5` | Mô hình sinh câu trả lời |
+| `DAILY_ASK_LIMIT` | `100` | Hạn mức gọi mô hình mỗi ngày |
+| `MONTHLY_ASK_LIMIT` | `3000` | Hạn mức gọi mô hình mỗi tháng |
+| `TIMEZONE_OFFSET_HOURS` | `7` | Mốc đổi ngày/tháng theo giờ nhà máy |
+
+Hạn mức chỉ đếm lượt **thực sự gọi ra dịch vụ ngoài**. Hết hạn mức thì tra cứu vẫn chạy bình
+thường, chỉ lùi về chế độ trích lược — không khoá công cụ giữa ca trực. Mức đã dùng hiển thị
+trên trang Cấu hình.
 
 ---
 

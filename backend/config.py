@@ -39,15 +39,26 @@ ORG_UNIT = _env("ORG_UNIT", "Phân xưởng VH-SC Hủa Na")
 HOST = _env("HOST", "0.0.0.0")
 PORT = int(_env("PORT", "8000") or 8000)
 
+# Phân hệ 2 — sinh câu trả lời.
 ANTHROPIC_API_KEY = _env("ANTHROPIC_API_KEY")
-ANTHROPIC_MODEL = _env("ANTHROPIC_MODEL", "claude-sonnet-5")
+ANTHROPIC_MODEL = _env("ANTHROPIC_MODEL", "claude-haiku-4-5")
 
-EMBEDDING_PROVIDER = _env("EMBEDDING_PROVIDER", "none").lower() or "none"
+# Hạn mức gọi mô hình sinh. Chỉ đếm lượt thực sự gọi ra dịch vụ ngoài; hết hạn
+# mức thì hệ thống lùi về chế độ trích lược chứ không khoá tra cứu.
+DAILY_ASK_LIMIT = int(_env("DAILY_ASK_LIMIT", "100") or 100)
+MONTHLY_ASK_LIMIT = int(_env("MONTHLY_ASK_LIMIT", "3000") or 3000)
+# Hạn mức ngày phải sang ngày mới theo giờ nhà máy. SQLite datetime('now') là
+# giờ UTC nên nếu dùng thẳng thì hạn mức reset lúc 7 giờ sáng.
+TIMEZONE_OFFSET_HOURS = int(_env("TIMEZONE_OFFSET_HOURS", "7") or 7)
+
+# Phân hệ 1 — truy hồi. Mặc định bge-m3 chạy nội bộ qua Ollama: xử lý tiếng Việt
+# tốt, không gửi tài liệu ra ngoài. Ollama không chạy thì truy hồi tự lùi về BM25.
+EMBEDDING_PROVIDER = _env("EMBEDDING_PROVIDER", "openai_compatible").lower() or "none"
 VOYAGE_API_KEY = _env("VOYAGE_API_KEY")
 VOYAGE_MODEL = _env("VOYAGE_MODEL", "voyage-3")
 OPENAI_BASE_URL = _env("OPENAI_BASE_URL", "http://localhost:11434/v1")
 OPENAI_API_KEY = _env("OPENAI_API_KEY")
-OPENAI_EMBEDDING_MODEL = _env("OPENAI_EMBEDDING_MODEL", "nomic-embed-text")
+OPENAI_EMBEDDING_MODEL = _env("OPENAI_EMBEDDING_MODEL", "bge-m3")
 
 # Tham số RAG
 CHUNK_SIZE = int(_env("CHUNK_SIZE", "900") or 900)
