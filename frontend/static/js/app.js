@@ -6,6 +6,7 @@ import * as forms from './pages/forms.js';
 import * as incidents from './pages/incidents.js';
 import * as library from './pages/library.js';
 import { createProceduresPage } from './pages/procedures.js';
+import { setOrg } from './print.js';
 import * as settings from './pages/settings.js';
 import { register, setNavigationHook, start } from './router.js';
 import { buildShell, highlightNav, resetView, setFooter, setPage } from './shell.js';
@@ -77,7 +78,9 @@ setNavigationHook(async (location, found) => {
 async function boot() {
   let plantName = 'Nhà máy Thủy điện Hủa Na';
   try {
-    plantName = (await api.config()).plant_name;
+    const cfg = await api.config();
+    plantName = cfg.plant_name;
+    setOrg(cfg.org_name, cfg.org_unit);
   } catch {
     // Máy chủ chưa sẵn sàng: vẫn dựng khung để hiển thị lỗi ở từng trang.
   }

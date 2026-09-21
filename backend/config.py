@@ -32,6 +32,11 @@ def _env(key: str, default: str = "") -> str:
 
 
 PLANT_NAME = _env("PLANT_NAME", "Nhà máy Thủy điện Hủa Na")
+# Tên in ở đầu phiếu thao tác. Hai phiếu mẫu nhà máy gửi ghi khác nhau
+# ("CTCP Thủy điện Hủa Na" và "Nhà máy Thủy điện Hủa Na") nên để cấu hình
+# được, nhà máy chốt một cách ghi rồi đặt trong .env.
+ORG_NAME = _env("ORG_NAME", "CTCP Thủy điện Hủa Na")
+ORG_UNIT = _env("ORG_UNIT", "Phân xưởng VH-SC Hủa Na")
 HOST = _env("HOST", "0.0.0.0")
 PORT = int(_env("PORT", "8000") or 8000)
 

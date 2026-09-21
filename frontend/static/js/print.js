@@ -1,14 +1,19 @@
 import { esc } from './ui.js';
 
-const ORG_PARENT = 'NHÀ MÁY THỦY ĐIỆN HỦA NA';
-const ORG_UNIT = 'PHÂN XƯỞNG VH-SC';
+let ORG_PARENT = 'CTCP Thủy điện Hủa Na';
+let ORG_UNIT = 'Phân xưởng VH-SC Hủa Na';
+
+export function setOrg(name, unit) {
+  if (name) ORG_PARENT = name;
+  if (unit) ORG_UNIT = unit;
+}
 
 function letterhead() {
   return `
     <div class="hdr">
       <div class="org">
-        <div class="parent">${ORG_PARENT}</div>
-        <div class="unit">${ORG_UNIT}</div>
+        <div class="parent">${esc(ORG_PARENT)}</div>
+        <div class="unit">${esc(ORG_UNIT)}</div>
       </div>
       <div class="natl">
         <div class="country">Cộng hoà xã hội chủ nghĩa Việt Nam</div>
@@ -22,8 +27,8 @@ function letterhead() {
 function ticketHead() {
   return `
     <div class="hdr-unit">
-      <div class="parent">${ORG_PARENT}</div>
-      <div class="unit">${ORG_UNIT}</div>
+      <div class="parent">${esc(ORG_PARENT)}</div>
+      <div class="unit">${esc(ORG_UNIT)}</div>
     </div>`;
 }
 

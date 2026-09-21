@@ -73,6 +73,8 @@ def runtime_config() -> dict:
     index.ensure_ready()
     return {
         "plant_name": config.PLANT_NAME,
+        "org_name": config.ORG_NAME,
+        "org_unit": config.ORG_UNIT,
         "generation": {
             "enabled": config.generation_enabled(),
             "model": config.ANTHROPIC_MODEL if config.generation_enabled() else "",
