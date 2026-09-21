@@ -176,15 +176,15 @@ export function printOperationTicket(form) {
       <thead>
         <tr>
           <th rowspan="2" style="width:10mm">Mục</th>
-          <th rowspan="2" style="width:22mm">Địa điểm</th>
-          <th colspan="3">Trình tự thao tác</th>
+          <th rowspan="2" style="width:22mm"></th>
+          <th colspan="2">Trình tự thao tác</th>
+          <th rowspan="2" style="width:16mm">Đã thực hiện</th>
           <th colspan="2">Thời gian</th>
           <th colspan="2">Người</th>
         </tr>
         <tr>
           <th style="width:9mm">Bước</th>
-          <th>Nội dung</th>
-          <th style="width:16mm">Đã thực hiện</th>
+          <th>Nội dung thao tác</th>
           <th style="width:14mm">Bắt đầu</th>
           <th style="width:14mm">Kết thúc</th>
           <th style="width:15mm">Ra lệnh</th>
