@@ -121,7 +121,9 @@ CREATE TABLE IF NOT EXISTS forms (
     equipment_id  INTEGER REFERENCES equipment(id) ON DELETE SET NULL,
     requesting_unit TEXT NOT NULL DEFAULT '',
     purpose       TEXT NOT NULL DEFAULT '',
-    conditions    TEXT NOT NULL DEFAULT '',
+    conditions    TEXT NOT NULL DEFAULT '[]',
+    -- safety giữ lại để không xoá dữ liệu đã nhập; phiếu thao tác không dùng
+    -- mục này nữa vì biện pháp an toàn thuộc phiếu công tác.
     safety        TEXT NOT NULL DEFAULT '[]',
     rows          TEXT NOT NULL DEFAULT '[]',
     notes         TEXT NOT NULL DEFAULT '',
@@ -197,7 +199,26 @@ def _migrate_forms(conn: sqlite3.Connection) -> None:
         """UPDATE forms SET form_type = 'co_lap'
             WHERE form_type IN ('phieu_thao_tac', 'phieu_co_lap')"""
     )
+    _migrate_conditions(conn)
     conn.commit()
+
+
+def _migrate_conditions(conn: sqlite3.Connection) -> None:
+    """Đổi cột conditions từ đoạn văn sang danh sách JSON đánh số được.
+
+    Phải chạy trước lần đọc đầu tiên: load_json trả về danh sách rỗng khi gặp
+    chuỗi không phải JSON, nên đoạn văn cũ sẽ biến mất khỏi giao diện nếu bỏ
+    qua bước này. Mỗi dòng của đoạn văn cũ thành một điều kiện.
+    """
+    for row in conn.execute("SELECT id, conditions FROM forms").fetchall():
+        raw = (row["conditions"] or "").strip()
+        if raw.startswith("["):
+            continue
+        items = [line.strip() for line in raw.split("\n") if line.strip()]
+        conn.execute(
+            "UPDATE forms SET conditions = ? WHERE id = ?",
+            (json.dumps(items, ensure_ascii=False), row["id"]),
+        )
 
 
 def query(sql: str, params: tuple | list = ()) -> list[sqlite3.Row]:

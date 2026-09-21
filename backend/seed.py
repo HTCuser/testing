@@ -502,12 +502,9 @@ FORMS = [
         equipment_code="H1-TUA",
         requesting_unit="Phân xưởng VH-SC",
         purpose="Tách tổ máy H1 khỏi lưới và đưa về trạng thái sửa chữa để thực hiện công tác bảo dưỡng.",
-        conditions="Có lệnh của Điều độ A1 và kế hoạch sửa chữa đã được phê duyệt.",
-        safety=[
-            "Kiểm tra không còn điện áp bằng thiết bị thử phù hợp cấp điện áp",
-            "Đặt tiếp địa di động tại các điểm quy định",
-            "Treo biển 'Cấm đóng điện! Có người đang làm việc' tại các điểm thao tác",
-            "Rào chắn khu vực làm việc và treo biển chỉ dẫn",
+        conditions=[
+            "Có lệnh của Điều độ A1 và kế hoạch sửa chữa tổ máy H1 đã được phê duyệt;",
+            "Tổ máy H1 đang vận hành, sơ đồ nối lưới ngăn lộ 171 nguyên vẹn;",
         ],
         rows=[
             {"section": "I", "target": "Tổ máy H1", "action": "Giảm tải về 0 MW theo lệnh Điều độ", "note": "Không quá 10 MW/phút"},
@@ -530,11 +527,10 @@ FORMS = [
         equipment_code="H1-TUA",
         requesting_unit="Phân xưởng VH-SC",
         purpose="Khôi phục sơ đồ và đưa tổ máy H1 trở lại vận hành sau khi hoàn thành công tác sửa chữa.",
-        conditions="Đã nghiệm thu công tác sửa chữa, đã thu hồi toàn bộ phiếu công tác.",
-        safety=[
-            "Xác nhận đã thu hồi toàn bộ phiếu công tác và người ra khỏi khu vực thiết bị",
-            "Kiểm tra và thu hồi hết tiếp địa di động, đếm đủ số lượng đã đặt",
-            "Kiểm tra không còn dụng cụ, vật tư trong buồng tuabin và hầm ống xả",
+        conditions=[
+            "Đã nghiệm thu công tác sửa chữa, toàn bộ phiếu công tác liên quan tổ máy H1 đã khoá, người và phương tiện đã rút hết;",
+            "Đã thu hồi đủ số tiếp địa di động đã đặt, đã tháo hết biển báo và rào chắn;",
+            "Tổ máy H1 đã được đăng ký đưa vào làm việc với Điều độ A1.",
         ],
         rows=[
             {"section": "I", "target": "Khu vực công tác", "action": "Thu hồi phiếu công tác, kiểm tra người đã ra hết", "note": ""},
@@ -555,11 +551,9 @@ FORMS = [
         equipment_code="HT-NKT",
         requesting_unit="Phân xưởng VH-SC",
         purpose="Cô lập tuyến nước làm mát tổ máy H1 để vệ sinh bộ làm mát và thay thế lọc.",
-        conditions="Tổ máy H1 đã dừng và nhiệt độ các gối trục đã giảm dưới 40°C.",
-        safety=[
-            "Xác nhận tổ máy đã dừng hẳn và không có kế hoạch khởi động trong thời gian công tác",
-            "Treo biển 'Cấm thao tác! Có người đang làm việc' tại các van đã khoá",
-            "Chuẩn bị phương tiện hứng nước khi xả đường ống",
+        conditions=[
+            "Tổ máy H1 đã dừng, không có kế hoạch khởi động trong thời gian công tác;",
+            "Nhiệt độ các gối trục đã giảm dưới 40°C;",
         ],
         rows=[
             {"section": "I", "target": "Van cấp nước làm mát tổng V-NKT-01", "action": "Đóng và khoá van bằng khoá cơ khí", "note": "Treo biển cảnh báo"},
@@ -579,12 +573,9 @@ FORMS = [
         equipment_code="AT1",
         requesting_unit="Phân xưởng VH-SC",
         purpose="Cô lập máy biến áp chính T1 khỏi lưới 220 kV và phía 13,8 kV để thực hiện thí nghiệm định kỳ.",
-        conditions="Có phương thức đã được Điều độ A1 duyệt, tổ máy H1 đã dừng.",
-        safety=[
-            "Kiểm tra không còn điện áp cả phía 220 kV và phía 13,8 kV",
-            "Đặt tiếp địa di động cả hai phía máy biến áp",
-            "Treo biển 'Cấm đóng điện! Có người đang làm việc' tại mọi điểm thao tác",
-            "Cảnh giới khu vực sân phân phối 220 kV, xác định ranh giới an toàn với các ngăn lộ mang điện",
+        conditions=[
+            "Có phương thức đã được Điều độ A1 duyệt, tổ máy H1 đã dừng;",
+            "Máy biến áp T1 đã được đăng ký tách ra khỏi vận hành để thí nghiệm;",
         ],
         rows=[
             {"section": "I", "target": "Máy cắt 220kV 171", "action": "Cắt máy cắt", "note": "Xác nhận chỉ thị vị trí cắt"},
@@ -605,11 +596,9 @@ FORMS = [
         equipment_code="H2-GEN",
         requesting_unit="Phân xưởng VH-SC",
         purpose="Dừng tổ máy H2 và tách khỏi lưới theo biểu đồ huy động, giữ tổ máy ở trạng thái dừng dự phòng.",
-        conditions="Có lệnh của Điều độ A1. Không có công tác trên thiết bị, tổ máy còn nguyên sơ đồ.",
-        safety=[
-            "Xác nhận rõ nội dung lệnh và thời điểm thực hiện với Điều độ trước khi thao tác",
-            "Theo dõi mực nước hồ và lưu lượng xả để bảo đảm dòng chảy tối thiểu hạ du",
-            "Không cắt dao cách ly, không đặt tiếp địa — tổ máy giữ trạng thái sẵn sàng khởi động lại",
+        conditions=[
+            "Có lệnh của Điều độ A1 về việc tách tổ máy H2 theo biểu đồ huy động;",
+            "Không có công tác trên thiết bị tổ máy H2, sơ đồ nối lưới nguyên vẹn;",
         ],
         rows=[
             {"section": "I", "target": "Tổ máy H2", "action": "Giảm tải về công suất tối thiểu theo lệnh Điều độ", "note": "Không quá 10 MW/phút"},
@@ -629,11 +618,10 @@ FORMS = [
         equipment_code="H2-GEN",
         requesting_unit="Phân xưởng VH-SC",
         purpose="Khởi động tổ máy H2 từ trạng thái dừng dự phòng và hoà vào lưới theo biểu đồ huy động.",
-        conditions="Có lệnh của Điều độ A1. Tổ máy ở trạng thái dừng dự phòng, không có phiếu công tác trên thiết bị.",
-        safety=[
-            "Kiểm tra không có người và vật tư trong buồng tuabin, hầm ống xả trước khi khởi động",
-            "Xác nhận không tồn tại phiếu công tác chưa thu hồi trên tổ máy H2",
-            "Theo dõi độ rung khi qua vùng tốc độ cộng hưởng, sẵn sàng dừng sự cố",
+        conditions=[
+            "Có lệnh huy động của Điều độ A1 đối với tổ máy H2;",
+            "Tổ máy H2 ở trạng thái dừng dự phòng, không có phiếu công tác trên thiết bị;",
+            "Các hệ thống phụ trợ sẵn sàng, mực nước thượng lưu trên mực nước chết.",
         ],
         rows=[
             {"section": "I", "target": "Tổ máy H2", "action": "Kiểm tra điều kiện khởi động: mức dầu, áp lực dầu điều tốc, nhiệt độ gối trục", "note": ""},

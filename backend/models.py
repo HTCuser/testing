@@ -84,8 +84,9 @@ class FormIn(BaseModel):
     equipment_id: int | None = None
     requesting_unit: str = ""
     purpose: str = ""
-    conditions: str = ""
-    safety: list[str] = []
+    # Điều kiện được đánh số trên phiếu giấy nên lưu thành danh sách.
+    # Phiếu thao tác không mang biện pháp an toàn — mục đó thuộc phiếu công tác.
+    conditions: list[str] = []
     rows: list[FormRow] = []
     notes: str = ""
 

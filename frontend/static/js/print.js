@@ -114,19 +114,21 @@ function dateLine() {
 export function printOperationTicket(form) {
   const rows = form.rows || [];
   const groups = groupBySection(rows);
-  const body = groups.map((g) => g.rows.map((row, i) => `
+  let step = 0;
+  const body = groups.map((g) => g.rows.map((row, i) => {
+    step += 1;
+    return `
     <tr>
       ${i === 0 ? `<td class="center muc" rowspan="${g.rows.length}">${esc(g.name)}</td>` : ''}
       <td>${esc(row.target)}</td>
-      <td class="center">${i + 1}</td>
+      <td class="center">${step}</td>
       <td>${esc(row.action)}${row.note ? `<div><i>${esc(row.note)}</i></div>` : ''}</td>
       <td></td><td></td><td></td><td></td><td></td>
-    </tr>`).join('')).join('');
+    </tr>`;
+  }).join('')).join('');
 
-  // Mẫu giấy gộp cảnh báo an toàn và ghi chú vào mục "Lưu ý" — phiếu không có
-  // mục Biện pháp an toàn riêng.
-  const cautions = [...(form.safety || []), ...(form.notes ? [form.notes] : [])];
-  const conditions = (form.conditions || '').split('\n').map((s) => s.trim()).filter(Boolean);
+  const cautions = form.notes ? [form.notes] : [];
+  const conditions = form.conditions || [];
 
   openSheet(`Phiếu thao tác — ${form.title}`, `
     ${ticketHead()}

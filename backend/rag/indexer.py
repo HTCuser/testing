@@ -167,15 +167,13 @@ def render_form(form: dict, equipment_name: str = "") -> str:
         lines.append(f"Thiết bị: {equipment_name}")
     if form.get("purpose"):
         lines.append(f"\n## Mục đích\n{form['purpose']}")
-    if form.get("conditions"):
-        lines.append(f"\n## Điều kiện\n{form['conditions']}")
-    safety = form.get("safety") or []
-    if safety:
-        lines.append("\n## Biện pháp an toàn")
-        lines.extend(f"- {item}" for item in safety)
+    conditions = form.get("conditions") or []
+    if conditions:
+        lines.append("\n## Điều kiện cần có để thực hiện")
+        lines.extend(f"{i}. {item}" for i, item in enumerate(conditions, start=1))
     rows = form.get("rows") or []
     if rows:
-        lines.append("\n## Nội dung thao tác")
+        lines.append("\n## Trình tự hạng mục thao tác")
         for i, row in enumerate(rows, start=1):
             action = row.get("action", "") if isinstance(row, dict) else str(row)
             target = row.get("target", "") if isinstance(row, dict) else ""

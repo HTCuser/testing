@@ -11,7 +11,7 @@ from ..rag.textutils import normalize
 
 router = APIRouter(prefix="/api/forms", tags=["Biểu mẫu"])
 
-JSON_FIELDS = ("safety", "rows")
+JSON_FIELDS = ("conditions", "rows")
 
 
 @router.get("/types")
@@ -55,6 +55,8 @@ def list_forms(
 def _label(item: dict) -> dict:
     item["form_type_label"] = FORM_LABELS.get(item["form_type"], item["form_type"])
     item["context_label"] = FORM_CONTEXT_LABELS.get(item["context"], item["context"])
+    # Cột safety còn trong bảng để giữ dữ liệu cũ nhưng không thuộc phiếu thao tác.
+    item.pop("safety", None)
     return item
 
 
@@ -75,13 +77,13 @@ def get_form(form_id: int) -> dict:
 def create_form(payload: FormIn) -> dict:
     new_id = execute(
         """INSERT INTO forms (code, title, form_type, context, work_type, equipment_id,
-                              requesting_unit, purpose, conditions, safety, rows, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                              requesting_unit, purpose, conditions, rows, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             payload.code, payload.title, payload.form_type, payload.context,
             payload.work_type, payload.equipment_id, payload.requesting_unit,
-            payload.purpose, payload.conditions,
-            dump_json(payload.safety), dump_json([r.model_dump() for r in payload.rows]),
+            payload.purpose, dump_json(payload.conditions),
+            dump_json([r.model_dump() for r in payload.rows]),
             payload.notes,
         ),
     )
@@ -96,13 +98,13 @@ def update_form(form_id: int, payload: FormIn) -> dict:
     execute(
         """UPDATE forms SET code = ?, title = ?, form_type = ?, context = ?, work_type = ?,
                   equipment_id = ?, requesting_unit = ?, purpose = ?, conditions = ?,
-                  safety = ?, rows = ?, notes = ?, updated_at = datetime('now')
+                  rows = ?, notes = ?, updated_at = datetime('now')
             WHERE id = ?""",
         (
             payload.code, payload.title, payload.form_type, payload.context,
             payload.work_type, payload.equipment_id, payload.requesting_unit,
-            payload.purpose, payload.conditions,
-            dump_json(payload.safety), dump_json([r.model_dump() for r in payload.rows]),
+            payload.purpose, dump_json(payload.conditions),
+            dump_json([r.model_dump() for r in payload.rows]),
             payload.notes, form_id,
         ),
     )
@@ -115,13 +117,14 @@ def duplicate_form(form_id: int) -> dict:
     source = get_form(form_id)
     new_id = execute(
         """INSERT INTO forms (code, title, form_type, context, work_type, equipment_id,
-                              requesting_unit, purpose, conditions, safety, rows, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                              requesting_unit, purpose, conditions, rows, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             source["code"], f"{source['title']} (bản sao)", source["form_type"],
             source["context"], source["work_type"], source["equipment_id"],
-            source["requesting_unit"], source["purpose"], source["conditions"],
-            dump_json(source["safety"]), dump_json(source["rows"]), source["notes"],
+            source["requesting_unit"], source["purpose"],
+            dump_json(source["conditions"]), dump_json(source["rows"]),
+            source["notes"],
         ),
     )
     _reindex(new_id)

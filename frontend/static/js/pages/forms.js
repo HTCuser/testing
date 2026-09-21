@@ -232,12 +232,9 @@ function openEditor(existing, equipmentItems, defaults, onDone) {
           <textarea class="textarea" name="purpose" style="min-height:52px">${esc(existing?.purpose || '')}</textarea>
         </div>
         <div class="field">
-          <label>Điều kiện thực hiện</label>
-          <textarea class="textarea" name="conditions" style="min-height:52px">${esc(existing?.conditions || '')}</textarea>
-        </div>
-        <div class="field">
-          <label>Biện pháp an toàn</label>
-          <div id="safety"></div>
+          <label>Điều kiện cần có để thực hiện
+            <span class="hint">(mỗi điều kiện một dòng, in ra sẽ được đánh số)</span></label>
+          <div id="conditions"></div>
         </div>
         <div class="field">
           <label>Trình tự hạng mục thao tác
@@ -254,9 +251,9 @@ function openEditor(existing, equipmentItems, defaults, onDone) {
       <button class="btn" data-close>Huỷ</button>
       <button class="btn btn-primary" id="do-save">${icon('check', 16)}Lưu biểu mẫu</button>`,
     onMount(root, close) {
-      const safety = repeatList(qs('#safety', root), {
-        values: existing?.safety || [],
-        placeholder: 'VD: Treo biển "Cấm đóng điện! Có người đang làm việc"',
+      const conditions = repeatList(qs('#conditions', root), {
+        values: existing?.conditions || [],
+        placeholder: 'VD: Có lệnh của Điều độ A1 và phương thức đã được duyệt',
       });
       const rows = repeatList(qs('#rows', root), {
         values: existing?.rows || [],
@@ -276,7 +273,7 @@ function openEditor(existing, equipmentItems, defaults, onDone) {
         const payload = {
           ...raw,
           equipment_id: raw.equipment_id ? Number(raw.equipment_id) : null,
-          safety: safety.value(),
+          conditions: conditions.value(),
           rows: rows.value(),
         };
         try {
@@ -350,14 +347,12 @@ async function renderDetail(root, id) {
       </section>
 
       <div style="display:flex;flex-direction:column;gap:16px">
-        ${form.safety.length ? `
+        ${form.conditions.length ? `
         <section class="card">
-          <div class="card-head"><h2 class="card-title">Biện pháp an toàn</h2></div>
-          <div class="callout callout-danger">
-            <ul class="bullet-list" style="color:inherit">
-              ${form.safety.map((s) => `<li>${esc(s)}</li>`).join('')}
-            </ul>
-          </div>
+          <div class="card-head"><h2 class="card-title">Điều kiện cần có để thực hiện</h2></div>
+          <ol style="margin:0;padding-left:20px;line-height:1.8">
+            ${form.conditions.map((c) => `<li>${esc(c)}</li>`).join('')}
+          </ol>
         </section>` : ''}
 
         <section class="card">
@@ -373,8 +368,6 @@ async function renderDetail(root, id) {
           </dl>
           ${form.purpose ? `<div class="section-title">Mục đích</div>
             <p style="margin:0;line-height:1.7">${esc(form.purpose)}</p>` : ''}
-          ${form.conditions ? `<div class="section-title">Điều kiện</div>
-            <p style="margin:0;line-height:1.7">${esc(form.conditions)}</p>` : ''}
           ${form.notes ? `<div class="section-title">Ghi chú</div>
             <p style="margin:0;line-height:1.7">${esc(form.notes)}</p>` : ''}
         </section>
