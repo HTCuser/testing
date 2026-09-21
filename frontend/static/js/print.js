@@ -1,7 +1,7 @@
 import { esc } from './ui.js';
 
-const ORG_PARENT = 'CÔNG TY CỔ PHẦN THUỶ ĐIỆN HỦA NA';
-const ORG_UNIT = 'PHÂN XƯỞNG VẬN HÀNH';
+const ORG_PARENT = 'NHÀ MÁY THỦY ĐIỆN HỦA NA';
+const ORG_UNIT = 'PHÂN XƯỞNG VH-SC';
 
 function letterhead() {
   return `
@@ -14,6 +14,16 @@ function letterhead() {
         <div class="country">Cộng hoà xã hội chủ nghĩa Việt Nam</div>
         <div class="motto">Độc lập - Tự do - Hạnh phúc</div>
       </div>
+    </div>`;
+}
+
+/* Đầu phiếu thao tác: mẫu hiện hành của nhà máy chỉ có tên đơn vị, không có
+   quốc hiệu, nên dùng riêng thay vì letterhead() dùng chung cho quy trình. */
+function ticketHead() {
+  return `
+    <div class="hdr-unit">
+      <div class="parent">${ORG_PARENT}</div>
+      <div class="unit">${ORG_UNIT}</div>
     </div>`;
 }
 
@@ -58,116 +68,169 @@ function safetyList(items) {
     <ul class="plain">${items.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>`;
 }
 
-const CONTEXT_LABELS = {
-  van_hanh: 'Vận hành bình thường',
-  bao_duong: 'Bảo dưỡng, sửa chữa',
-};
-
-function contextLine(form) {
-  const label = CONTEXT_LABELS[form.context];
-  if (!label) return '';
-  return `<div><span class="label">Trường hợp áp dụng:</span> ${esc(label)}</div>`;
-}
-
 /* ------------------------------------------------------------- phiếu thao tác */
 
-export function printOperationForm(form) {
-  const rows = form.rows || [];
-  const body = rows.map((row, i) => `
-    <tr>
-      <td class="tt">${i + 1}</td>
-      <td>${esc([row.target, row.action].filter(Boolean).join(' — '))}
-        ${row.note ? `<div><i>Lưu ý: ${esc(row.note)}</i></div>` : ''}</td>
-      <td></td><td></td>
-    </tr>`).join('');
-
-  openSheet(`Phiếu tái lập — ${form.title}`, `
-    ${letterhead()}
-    <h1 class="doc-title">Phiếu thao tác tái lập</h1>
-    <div class="doc-sub">Số: ......... /PTL-${new Date().getFullYear()}</div>
-
-    <div class="meta">
-      ${contextLine(form)}
-      <div><span class="label">Dạng công tác:</span> ${esc(form.work_type || form.title)}</div>
-      <div><span class="label">Thiết bị thao tác:</span> ${esc(form.equipment_name || '..............................')}</div>
-      <div><span class="label">Mục đích thao tác:</span> ${esc(form.purpose || '..............................')}</div>
-      <div><span class="label">Người ra lệnh:</span> <span class="dotted"></span>
-           <span class="label" style="min-width:34mm"> Chức danh:</span> <span class="dotted"></span></div>
-      <div><span class="label">Người giám sát thao tác:</span> <span class="dotted"></span></div>
-      <div><span class="label">Người thao tác:</span> <span class="dotted"></span></div>
-      <div><span class="label">Bắt đầu lúc:</span> ...... giờ ...... ngày ...... tháng ...... năm ......
-           <span class="label" style="min-width:26mm"> Kết thúc lúc:</span> ...... giờ ...... ngày ...... tháng ...... năm ......</div>
-    </div>
-
-    ${form.conditions ? `<h2 class="sec">Điều kiện thực hiện</h2><p>${esc(form.conditions)}</p>` : ''}
-    ${safetyList(form.safety)}
-
-    <h2 class="sec">Trình tự thao tác</h2>
-    <table>
-      <thead><tr>
-        <th style="width:12mm">TT</th>
-        <th>Nội dung thao tác</th>
-        <th style="width:26mm">Thời gian</th>
-        <th style="width:32mm">Ký xác nhận</th>
-      </tr></thead>
-      <tbody>${body}${blankRows(rows.length ? 3 : 12, 4)}</tbody>
-    </table>
-
-    ${form.notes ? `<div class="note">Ghi chú: ${esc(form.notes)}</div>` : ''}
-    <div class="note">Phiếu chỉ có hiệu lực khi đã được duyệt và có lệnh của Trưởng ca.</div>
-
-    ${signBlock(['Người ra lệnh', 'Người giám sát', 'Người thao tác'])}`);
+/* Gộp các bước liên tiếp cùng một Mục để đổ rowspan cho cột "Mục".
+   Dòng bỏ trống Mục được coi là nối tiếp hạng mục phía trên. */
+function groupBySection(rows) {
+  const groups = [];
+  let current = null;
+  rows.forEach((row) => {
+    const name = (row.section || '').trim();
+    if (!current || (name && name !== current.name)) {
+      current = { name: name || (current ? current.name : ''), rows: [] };
+      groups.push(current);
+    }
+    current.rows.push(row);
+  });
+  return groups;
 }
 
-/* --------------------------------------------------------------- phiếu cô lập */
+function handoverTable() {
+  return `
+    <table class="tbl-handover">
+      <thead><tr>
+        <th style="width:32mm">Thời gian</th>
+        <th style="width:38mm">Đơn vị</th>
+        <th style="width:42mm">Họ tên</th>
+        <th>Nội dung</th>
+      </tr></thead>
+      <tbody>${blankRows(3, 4)}</tbody>
+    </table>`;
+}
 
-export function printIsolationForm(form) {
+function numberedBlock(items, blanks) {
+  const lines = items.map((t, i) => `<div class="num-line">${i + 1}. ${esc(t)}</div>`);
+  for (let i = 0; i < blanks; i += 1) {
+    lines.push(`<div class="num-line">${items.length + i + 1}. <span class="fill"></span></div>`);
+  }
+  return lines.join('');
+}
+
+function dateLine() {
+  return '<div class="date-line"><i>Ngày ...... tháng ...... năm ............</i></div>';
+}
+
+export function printOperationTicket(form) {
   const rows = form.rows || [];
-  const body = rows.map((row, i) => `
+  const groups = groupBySection(rows);
+  const body = groups.map((g) => g.rows.map((row, i) => `
     <tr>
-      <td class="tt">${i + 1}</td>
+      ${i === 0 ? `<td class="center muc" rowspan="${g.rows.length}">${esc(g.name)}</td>` : ''}
       <td>${esc(row.target)}</td>
+      <td class="center">${i + 1}</td>
       <td>${esc(row.action)}${row.note ? `<div><i>${esc(row.note)}</i></div>` : ''}</td>
-      <td></td><td></td>
-    </tr>`).join('');
+      <td></td><td></td><td></td><td></td><td></td>
+    </tr>`).join('')).join('');
 
-  openSheet(`Phiếu cô lập — ${form.title}`, `
-    ${letterhead()}
-    <h1 class="doc-title">Phiếu thao tác cô lập</h1>
-    <div class="doc-sub">Số: ......... /PCL-${new Date().getFullYear()}</div>
+  // Mẫu giấy gộp cảnh báo an toàn và ghi chú vào mục "Lưu ý" — phiếu không có
+  // mục Biện pháp an toàn riêng.
+  const cautions = [...(form.safety || []), ...(form.notes ? [form.notes] : [])];
+  const conditions = (form.conditions || '').split('\n').map((s) => s.trim()).filter(Boolean);
+
+  openSheet(`Phiếu thao tác — ${form.title}`, `
+    ${ticketHead()}
+    <h1 class="doc-title">Phiếu thao tác</h1>
 
     <div class="meta">
-      ${contextLine(form)}
-      <div><span class="label">Tên công việc:</span> ${esc(form.title)}</div>
-      <div><span class="label">Thiết bị cô lập:</span> ${esc(form.equipment_name || '..............................')}</div>
-      <div><span class="label">Mục đích:</span> ${esc(form.purpose || '..............................')}</div>
-      <div><span class="label">Đơn vị công tác:</span> <span class="dotted"></span></div>
-      <div><span class="label">Người chỉ huy trực tiếp:</span> <span class="dotted"></span></div>
-      <div><span class="label">Thời gian cô lập:</span> ...... giờ ...... ngày ...... tháng ...... năm ......</div>
+      <div><span class="label">Tên phiếu thao tác:</span> ${esc(form.title)}</div>
+      <div><span class="label">Mục đích thao tác:</span> ${esc(form.purpose || '')}</div>
+      <div><span class="label">Thời gian dự kiến:</span></div>
+      <div class="indent">Bắt đầu: ...... giờ ...... Ngày ...... tháng ...... năm ............</div>
+      <div class="indent">Kết thúc: ...... giờ ...... Ngày ...... tháng ...... năm ............</div>
+      <div><span class="label">Đơn vị đề nghị thao tác:</span>
+        ${form.requesting_unit ? esc(form.requesting_unit) : '<span class="dotted"></span>'}</div>
     </div>
 
-    ${form.conditions ? `<h2 class="sec">Điều kiện</h2><p>${esc(form.conditions)}</p>` : ''}
-    ${safetyList(form.safety)}
-
-    <h2 class="sec">Biện pháp cô lập và khôi phục</h2>
-    <table>
-      <thead><tr>
-        <th style="width:12mm">TT</th>
-        <th style="width:52mm">Vị trí / thiết bị</th>
-        <th>Biện pháp cô lập</th>
-        <th style="width:26mm">Ký cô lập</th>
-        <th style="width:26mm">Ký khôi phục</th>
-      </tr></thead>
-      <tbody>${body}${blankRows(rows.length ? 3 : 12, 5)}</tbody>
+    <table class="tbl-roles">
+      <tbody>
+        <tr><td>Người viết phiếu:</td><td class="fillcell"></td>
+            <td>Chức vụ:</td><td class="fillcell"></td></tr>
+        <tr><td>Người duyệt phiếu:</td><td class="fillcell"></td>
+            <td>Chức vụ:</td><td class="fillcell"></td></tr>
+        <tr><td>Người giám sát:</td><td class="fillcell"></td>
+            <td>Chức vụ:</td><td class="fillcell"></td></tr>
+        <tr><td>Người thao tác:</td><td class="fillcell"></td>
+            <td>Chức vụ:</td><td class="fillcell"></td></tr>
+      </tbody>
     </table>
 
-    ${form.notes ? `<div class="note">Ghi chú: ${esc(form.notes)}</div>` : ''}
-    <div class="note">
-      Chỉ bàn giao hiện trường cho đơn vị công tác sau khi đã thực hiện đủ các biện pháp cô lập nêu trên
-      và kiểm tra không còn điện áp, không còn áp lực dư.
+    <div class="lbl">Điều kiện cần có để thực hiện:</div>
+    ${numberedBlock(conditions, 1)}
+
+    <div class="lbl">Lưu ý: (nếu có)</div>
+    ${numberedBlock(cautions, cautions.length ? 1 : 2)}
+
+    <div class="lbl">Giao nhận, nghiệm thu đường dây, thiết bị điện trước khi thao tác: (nếu có)</div>
+    ${handoverTable()}
+
+    <div class="lbl">Trình tự hạng mục thao tác:</div>
+    <table class="tbl-steps">
+      <thead>
+        <tr>
+          <th rowspan="2" style="width:10mm">Mục</th>
+          <th rowspan="2" style="width:22mm">Địa điểm</th>
+          <th colspan="3">Trình tự thao tác</th>
+          <th colspan="2">Thời gian</th>
+          <th colspan="2">Người</th>
+        </tr>
+        <tr>
+          <th style="width:9mm">Bước</th>
+          <th>Nội dung</th>
+          <th style="width:16mm">Đã thực hiện</th>
+          <th style="width:14mm">Bắt đầu</th>
+          <th style="width:14mm">Kết thúc</th>
+          <th style="width:15mm">Ra lệnh</th>
+          <th style="width:15mm">Nhận lệnh</th>
+        </tr>
+      </thead>
+      <tbody>${body}${blankRows(rows.length ? 2 : 14, 9)}</tbody>
+    </table>
+
+    <div class="lbl">Giao nhận, nghiệm thu đường dây, thiết bị điện sau thao tác: (nếu có)</div>
+    ${handoverTable()}
+
+    <div class="lbl">Các sự kiện bất thường trong thao tác:</div>
+    <div class="num-line"><span class="fill"></span></div>
+    <div class="num-line"><span class="fill"></span></div>
+
+    <div class="sign-block">
+      ${dateLine()}
+      <div class="sign-row">
+        <div class="sign-box">
+          <div class="role">Người viết phiếu</div>
+          <div class="hint">(Ký và ghi rõ họ tên)</div>
+          <div class="space"></div>
+        </div>
+        <div class="sign-box">
+          <div class="role">Người duyệt phiếu</div>
+          <div class="hint">(Ký và ghi rõ họ tên)</div>
+          <div class="space"></div>
+        </div>
+      </div>
     </div>
 
-    ${signBlock(['Trưởng ca', 'Người cho phép', 'Người chỉ huy trực tiếp'])}`);
+    <div class="sign-block">
+      <div class="sign-head">
+        <span>Người thực hiện thao tác:</span>
+        ${dateLine()}
+      </div>
+      <div class="sign-row">
+        <div class="sign-box">
+          <div class="role">Người giám sát</div>
+          <div class="hint">(Ký và ghi rõ họ tên)</div>
+          <div class="space"></div>
+        </div>
+        <div class="sign-box">
+          <div class="role">Người thao tác</div>
+          <div class="hint">(Ký và ghi rõ họ tên)</div>
+          <div class="space"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">Sơ đồ: Thể hiện sơ đồ các thiết bị liên quan đến thao tác,
+      chỉ kèm theo phiếu thao tác nếu Người duyệt phiếu yêu cầu.</div>`);
 }
 
 /* ------------------------------------------------------------------ quy trình */

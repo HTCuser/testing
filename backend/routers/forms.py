@@ -75,11 +75,12 @@ def get_form(form_id: int) -> dict:
 def create_form(payload: FormIn) -> dict:
     new_id = execute(
         """INSERT INTO forms (code, title, form_type, context, work_type, equipment_id,
-                              purpose, conditions, safety, rows, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                              requesting_unit, purpose, conditions, safety, rows, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             payload.code, payload.title, payload.form_type, payload.context,
-            payload.work_type, payload.equipment_id, payload.purpose, payload.conditions,
+            payload.work_type, payload.equipment_id, payload.requesting_unit,
+            payload.purpose, payload.conditions,
             dump_json(payload.safety), dump_json([r.model_dump() for r in payload.rows]),
             payload.notes,
         ),
@@ -94,12 +95,13 @@ def update_form(form_id: int, payload: FormIn) -> dict:
         raise HTTPException(404, "Không tìm thấy biểu mẫu")
     execute(
         """UPDATE forms SET code = ?, title = ?, form_type = ?, context = ?, work_type = ?,
-                  equipment_id = ?, purpose = ?, conditions = ?, safety = ?, rows = ?,
-                  notes = ?, updated_at = datetime('now')
+                  equipment_id = ?, requesting_unit = ?, purpose = ?, conditions = ?,
+                  safety = ?, rows = ?, notes = ?, updated_at = datetime('now')
             WHERE id = ?""",
         (
             payload.code, payload.title, payload.form_type, payload.context,
-            payload.work_type, payload.equipment_id, payload.purpose, payload.conditions,
+            payload.work_type, payload.equipment_id, payload.requesting_unit,
+            payload.purpose, payload.conditions,
             dump_json(payload.safety), dump_json([r.model_dump() for r in payload.rows]),
             payload.notes, form_id,
         ),
@@ -113,13 +115,13 @@ def duplicate_form(form_id: int) -> dict:
     source = get_form(form_id)
     new_id = execute(
         """INSERT INTO forms (code, title, form_type, context, work_type, equipment_id,
-                              purpose, conditions, safety, rows, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                              requesting_unit, purpose, conditions, safety, rows, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             source["code"], f"{source['title']} (bản sao)", source["form_type"],
             source["context"], source["work_type"], source["equipment_id"],
-            source["purpose"], source["conditions"], dump_json(source["safety"]),
-            dump_json(source["rows"]), source["notes"],
+            source["requesting_unit"], source["purpose"], source["conditions"],
+            dump_json(source["safety"]), dump_json(source["rows"]), source["notes"],
         ),
     )
     _reindex(new_id)

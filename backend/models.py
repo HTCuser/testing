@@ -67,6 +67,9 @@ class IncidentIn(BaseModel):
 
 
 class FormRow(BaseModel):
+    # section = cột "Mục" trên phiếu giấy (I, II, ...), dùng gộp các bước cùng
+    # một hạng mục thao tác; để trống thì bước nối tiếp hạng mục phía trên.
+    section: str = ""
     target: str = ""
     action: str = ""
     note: str = ""
@@ -79,6 +82,7 @@ class FormIn(BaseModel):
     form_type: FormType = "co_lap"
     work_type: str = ""
     equipment_id: int | None = None
+    requesting_unit: str = ""
     purpose: str = ""
     conditions: str = ""
     safety: list[str] = []

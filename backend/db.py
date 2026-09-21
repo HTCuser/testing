@@ -119,6 +119,7 @@ CREATE TABLE IF NOT EXISTS forms (
     context       TEXT NOT NULL DEFAULT 'bao_duong',
     work_type     TEXT NOT NULL DEFAULT '',
     equipment_id  INTEGER REFERENCES equipment(id) ON DELETE SET NULL,
+    requesting_unit TEXT NOT NULL DEFAULT '',
     purpose       TEXT NOT NULL DEFAULT '',
     conditions    TEXT NOT NULL DEFAULT '',
     safety        TEXT NOT NULL DEFAULT '[]',
@@ -182,6 +183,10 @@ def _migrate_forms(conn: sqlite3.Connection) -> None:
     if "context" not in columns:
         conn.execute(
             "ALTER TABLE forms ADD COLUMN context TEXT NOT NULL DEFAULT 'bao_duong'"
+        )
+    if "requesting_unit" not in columns:
+        conn.execute(
+            "ALTER TABLE forms ADD COLUMN requesting_unit TEXT NOT NULL DEFAULT ''"
         )
     conn.execute(
         """UPDATE forms SET form_type = 'tai_lap'

@@ -58,6 +58,41 @@ ul.plain li { margin-bottom: 1.5mm; }
 
 .note { font-style: italic; font-size: 11.5pt; margin-top: 4mm; }
 
+/* ------------------------------------------- phiếu thao tác (mẫu nhà máy) */
+
+.hdr-unit { margin-bottom: 4mm; font-size: 12pt; }
+.hdr-unit .parent { text-transform: uppercase; }
+.hdr-unit .unit { text-transform: uppercase; font-weight: bold; text-decoration: underline; }
+
+/* Nhãn chiếm cột cố định, phần giá trị tự xuống dòng thẳng lề. */
+.meta div { display: flex; gap: 2mm; }
+.meta .label { flex: 0 0 46mm; min-width: 0; }
+.meta .indent { display: block; margin-left: 24mm; }
+
+.lbl { font-weight: bold; margin: 4mm 0 2mm; }
+
+.num-line { margin-bottom: 1.8mm; display: flex; gap: 2mm; align-items: baseline; }
+.num-line .fill { flex: 1; border-bottom: 1px dotted #000; min-height: 5mm; }
+
+/* Bảng chức danh không kẻ khung, chỉ gạch chân chỗ điền tay. */
+.tbl-roles { border: none; margin-bottom: 4mm; table-layout: fixed; }
+.tbl-roles td { border: none; padding: 1.2mm 2mm 1.2mm 0; }
+.tbl-roles td.fillcell { border-bottom: 1px dotted #000; }
+.tbl-roles td:nth-child(1) { width: 40mm; }
+.tbl-roles td:nth-child(3) { width: 20mm; padding-left: 4mm; }
+
+.tbl-steps { font-size: 9.5pt; }
+.tbl-steps th, .tbl-steps td { padding: 1.2mm 1.5mm; }
+.tbl-steps td.muc { font-weight: bold; vertical-align: middle; }
+
+.tbl-handover { font-size: 11pt; }
+
+.sign-block { margin-top: 7mm; page-break-inside: avoid; }
+.sign-block .sign-row { margin-top: 2mm; }
+.sign-head { display: flex; justify-content: space-between; align-items: baseline; }
+.date-line { text-align: right; }
+.sign-head .date-line { text-align: right; flex: 0 0 auto; }
+
 @media screen {
   body { background: #eef4f7; padding: 0; }
   .sheet {

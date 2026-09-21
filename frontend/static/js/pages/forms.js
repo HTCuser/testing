@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { icon } from '../icons.js';
-import { printIsolationForm, printOperationForm } from '../print.js';
+import { printOperationTicket } from '../print.js';
 import { navigate } from '../router.js';
 import { isStale, setPage } from '../shell.js';
 import {
@@ -23,9 +23,10 @@ const TYPES = {
   tai_lap: { label: 'Phiếu tái lập', icon: 'forms', tone: 'green' },
 };
 
+// Nhà máy dùng chung một mẫu phiếu thao tác cho cả cô lập và tái lập; phân
+// loại cô lập/tái lập chỉ để tra cứu trong thư viện, không đổi mẫu in.
 export function printForm(form) {
-  if (form.form_type === 'co_lap') printIsolationForm(form);
-  else printOperationForm(form);
+  printOperationTicket(form);
 }
 
 export async function render(root, ctx) {
@@ -222,6 +223,11 @@ function openEditor(existing, equipmentItems, defaults, onDone) {
           </div>
         </div>
         <div class="field">
+          <label>Đơn vị đề nghị thao tác</label>
+          <input class="input" name="requesting_unit" value="${esc(existing?.requesting_unit || '')}"
+                 placeholder="VD: Phân xưởng VH-SC">
+        </div>
+        <div class="field">
           <label>Mục đích</label>
           <textarea class="textarea" name="purpose" style="min-height:52px">${esc(existing?.purpose || '')}</textarea>
         </div>
@@ -234,8 +240,9 @@ function openEditor(existing, equipmentItems, defaults, onDone) {
           <div id="safety"></div>
         </div>
         <div class="field">
-          <label>Nội dung từng dòng
-            <span class="hint">(vị trí/thiết bị — nội dung thao tác hoặc biện pháp cô lập — lưu ý)</span></label>
+          <label>Trình tự hạng mục thao tác
+            <span class="hint">(Mục I, II… — địa điểm — nội dung — lưu ý. Bỏ trống Mục thì
+              bước nối tiếp hạng mục phía trên)</span></label>
           <div id="rows"></div>
         </div>
         <div class="field">
@@ -254,8 +261,9 @@ function openEditor(existing, equipmentItems, defaults, onDone) {
       const rows = repeatList(qs('#rows', root), {
         values: existing?.rows || [],
         fields: [
-          { key: 'target', placeholder: 'Vị trí / thiết bị', flex: 2 },
-          { key: 'action', placeholder: 'Nội dung thao tác', flex: 3 },
+          { key: 'section', placeholder: 'Mục', flex: 1 },
+          { key: 'target', placeholder: 'Địa điểm', flex: 2 },
+          { key: 'action', placeholder: 'Nội dung thao tác', flex: 4 },
           { key: 'note', placeholder: 'Lưu ý', flex: 2 },
         ],
       });
@@ -300,7 +308,6 @@ async function renderDetail(root, id) {
 
   const type = TYPES[form.form_type] || TYPES.co_lap;
   const context = CONTEXTS[form.context];
-  const isIsolation = form.form_type === 'co_lap';
 
   setPage({
     title: form.title,
@@ -318,19 +325,21 @@ async function renderDetail(root, id) {
     <div class="grid two-col">
       <section class="card">
         <div class="card-head">
-          <h2 class="card-title">${isIsolation ? 'Biện pháp cô lập' : 'Trình tự tái lập'}</h2>
-          <div class="card-actions"><span class="badge badge-grey">${form.rows.length} dòng</span></div>
+          <h2 class="card-title">Trình tự hạng mục thao tác</h2>
+          <div class="card-actions"><span class="badge badge-grey">${form.rows.length} bước</span></div>
         </div>
         ${form.rows.length ? `
           <table class="table">
             <thead><tr>
-              <th style="width:44px">TT</th>
-              <th style="width:30%">Vị trí / thiết bị</th>
-              <th>${isIsolation ? 'Biện pháp cô lập' : 'Nội dung thao tác'}</th>
-              <th style="width:22%">Lưu ý</th>
+              <th style="width:44px">Mục</th>
+              <th style="width:44px">Bước</th>
+              <th style="width:24%">Địa điểm</th>
+              <th>Nội dung</th>
+              <th style="width:20%">Lưu ý</th>
             </tr></thead>
             <tbody>${form.rows.map((r, i) => `
               <tr>
+                <td class="text-muted">${esc(r.section || '')}</td>
                 <td class="text-muted">${i + 1}</td>
                 <td>${esc(r.target)}</td>
                 <td>${esc(r.action)}</td>
