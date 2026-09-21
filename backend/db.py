@@ -115,7 +115,8 @@ CREATE TABLE IF NOT EXISTS forms (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     code          TEXT NOT NULL DEFAULT '',
     title         TEXT NOT NULL,
-    form_type     TEXT NOT NULL DEFAULT 'phieu_thao_tac',
+    form_type     TEXT NOT NULL DEFAULT 'co_lap',
+    context       TEXT NOT NULL DEFAULT 'bao_duong',
     work_type     TEXT NOT NULL DEFAULT '',
     equipment_id  INTEGER REFERENCES equipment(id) ON DELETE SET NULL,
     purpose       TEXT NOT NULL DEFAULT '',
@@ -164,6 +165,33 @@ def tx() -> Iterator[sqlite3.Connection]:
 def init_db() -> None:
     conn = get_conn()
     conn.executescript(SCHEMA)
+    conn.commit()
+    _migrate_forms(conn)
+
+
+def _migrate_forms(conn: sqlite3.Connection) -> None:
+    """Chuyển bảng forms từ một chiều phân loại sang hai chiều.
+
+    Bản đầu chỉ có form_type ∈ {phieu_thao_tac, phieu_co_lap}. Nay tách thành
+    context (vận hành bình thường / bảo dưỡng sửa chữa) và form_type (cô lập /
+    tái lập). Phiếu cũ đều phát sinh từ công tác sửa chữa nên nhận context
+    'bao_duong'; chiều cô lập/tái lập suy từ work_type vì đó là dấu hiệu duy
+    nhất phân biệt được trong dữ liệu cũ.
+    """
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(forms)")}
+    if "context" not in columns:
+        conn.execute(
+            "ALTER TABLE forms ADD COLUMN context TEXT NOT NULL DEFAULT 'bao_duong'"
+        )
+    conn.execute(
+        """UPDATE forms SET form_type = 'tai_lap'
+            WHERE form_type IN ('phieu_thao_tac', 'phieu_co_lap')
+              AND work_type LIKE '%vào vận hành%'"""
+    )
+    conn.execute(
+        """UPDATE forms SET form_type = 'co_lap'
+            WHERE form_type IN ('phieu_thao_tac', 'phieu_co_lap')"""
+    )
     conn.commit()
 
 

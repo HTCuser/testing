@@ -8,7 +8,10 @@ from pydantic import BaseModel, Field
 ProcedureKind = Literal["van_hanh", "bao_duong", "su_co"]
 Severity = Literal["nghiem_trong", "trung_binh", "nhe"]
 IncidentSource = Literal["quy_trinh", "kinh_nghiem", "nha_may_khac"]
-FormType = Literal["phieu_thao_tac", "phieu_co_lap"]
+# Phiếu thao tác được phân theo hai chiều độc lập: bối cảnh phát sinh công tác
+# và loại thao tác (tách thiết bị ra hay đưa trở lại vận hành).
+FormContext = Literal["van_hanh", "bao_duong"]
+FormType = Literal["co_lap", "tai_lap"]
 
 
 class SpecItem(BaseModel):
@@ -72,7 +75,8 @@ class FormRow(BaseModel):
 class FormIn(BaseModel):
     code: str = ""
     title: str = Field(min_length=1, max_length=255)
-    form_type: FormType = "phieu_thao_tac"
+    context: FormContext = "bao_duong"
+    form_type: FormType = "co_lap"
     work_type: str = ""
     equipment_id: int | None = None
     purpose: str = ""

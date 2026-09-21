@@ -157,6 +157,10 @@ def render_form(form: dict, equipment_name: str = "") -> str:
     lines = [f"# {FORM_LABELS.get(form.get('form_type', ''), 'Biểu mẫu')}: {form['title']}"]
     if form.get("code"):
         lines.append(f"Mã biểu mẫu: {form['code']}")
+    if form.get("context"):
+        lines.append(
+            f"Trường hợp áp dụng: {FORM_CONTEXT_LABELS.get(form['context'], form['context'])}"
+        )
     if form.get("work_type"):
         lines.append(f"Dạng công tác: {form['work_type']}")
     if equipment_name:
@@ -199,6 +203,10 @@ SOURCE_LABELS = {
     "nha_may_khac": "Bài học từ nhà máy điện khác",
 }
 FORM_LABELS = {
-    "phieu_thao_tac": "Phiếu thao tác",
-    "phieu_co_lap": "Phiếu cô lập thiết bị",
+    "co_lap": "Phiếu cô lập",
+    "tai_lap": "Phiếu tái lập",
+}
+FORM_CONTEXT_LABELS = {
+    "van_hanh": "Vận hành bình thường",
+    "bao_duong": "Bảo dưỡng, sửa chữa",
 }

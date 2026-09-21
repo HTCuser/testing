@@ -58,6 +58,17 @@ function safetyList(items) {
     <ul class="plain">${items.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>`;
 }
 
+const CONTEXT_LABELS = {
+  van_hanh: 'Vận hành bình thường',
+  bao_duong: 'Bảo dưỡng, sửa chữa',
+};
+
+function contextLine(form) {
+  const label = CONTEXT_LABELS[form.context];
+  if (!label) return '';
+  return `<div><span class="label">Trường hợp áp dụng:</span> ${esc(label)}</div>`;
+}
+
 /* ------------------------------------------------------------- phiếu thao tác */
 
 export function printOperationForm(form) {
@@ -70,12 +81,13 @@ export function printOperationForm(form) {
       <td></td><td></td>
     </tr>`).join('');
 
-  openSheet(`Phiếu thao tác — ${form.title}`, `
+  openSheet(`Phiếu tái lập — ${form.title}`, `
     ${letterhead()}
-    <h1 class="doc-title">Phiếu thao tác</h1>
-    <div class="doc-sub">Số: ......... /PTT-${new Date().getFullYear()}</div>
+    <h1 class="doc-title">Phiếu thao tác tái lập</h1>
+    <div class="doc-sub">Số: ......... /PTL-${new Date().getFullYear()}</div>
 
     <div class="meta">
+      ${contextLine(form)}
       <div><span class="label">Dạng công tác:</span> ${esc(form.work_type || form.title)}</div>
       <div><span class="label">Thiết bị thao tác:</span> ${esc(form.equipment_name || '..............................')}</div>
       <div><span class="label">Mục đích thao tác:</span> ${esc(form.purpose || '..............................')}</div>
@@ -121,10 +133,11 @@ export function printIsolationForm(form) {
 
   openSheet(`Phiếu cô lập — ${form.title}`, `
     ${letterhead()}
-    <h1 class="doc-title">Phiếu cô lập thiết bị</h1>
-    <div class="doc-sub">Kèm theo Phiếu công tác số: ......... /PCT-${new Date().getFullYear()}</div>
+    <h1 class="doc-title">Phiếu thao tác cô lập</h1>
+    <div class="doc-sub">Số: ......... /PCL-${new Date().getFullYear()}</div>
 
     <div class="meta">
+      ${contextLine(form)}
       <div><span class="label">Tên công việc:</span> ${esc(form.title)}</div>
       <div><span class="label">Thiết bị cô lập:</span> ${esc(form.equipment_name || '..............................')}</div>
       <div><span class="label">Mục đích:</span> ${esc(form.purpose || '..............................')}</div>

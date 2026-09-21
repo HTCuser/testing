@@ -9,17 +9,22 @@ import {
 } from '../ui.js';
 
 export const meta = {
-  title: 'Phiếu thao tác và phiếu cô lập',
-  subtitle: 'Biểu mẫu chuẩn theo từng dạng công tác, in trực tiếp để sử dụng tại hiện trường',
+  title: 'Phiếu thao tác',
+  subtitle: 'Phân theo trường hợp áp dụng và loại thao tác, in trực tiếp để sử dụng tại hiện trường',
+};
+
+const CONTEXTS = {
+  van_hanh: { label: 'Vận hành bình thường' },
+  bao_duong: { label: 'Bảo dưỡng, sửa chữa' },
 };
 
 const TYPES = {
-  phieu_thao_tac: { label: 'Phiếu thao tác', icon: 'forms', tone: 'blue' },
-  phieu_co_lap: { label: 'Phiếu cô lập thiết bị', icon: 'shield', tone: 'amber' },
+  co_lap: { label: 'Phiếu cô lập', icon: 'shield', tone: 'amber' },
+  tai_lap: { label: 'Phiếu tái lập', icon: 'forms', tone: 'green' },
 };
 
 export function printForm(form) {
-  if (form.form_type === 'phieu_co_lap') printIsolationForm(form);
+  if (form.form_type === 'co_lap') printIsolationForm(form);
   else printOperationForm(form);
 }
 
@@ -40,13 +45,20 @@ export async function render(root, ctx) {
     return;
   }
 
+  let activeContext = ctx.query.truong_hop || '';
   let activeType = ctx.query.loai || '';
 
   root.innerHTML = `
-    <div class="tabs" id="type-tabs">
-      <button class="tab ${activeType === '' ? 'active' : ''}" data-type="">Tất cả</button>
+    <div class="tabs" id="context-tabs">
+      <button class="tab ${activeContext === '' ? 'active' : ''}" data-context="">Tất cả</button>
+      ${Object.entries(CONTEXTS).map(([value, c]) => `
+        <button class="tab ${activeContext === value ? 'active' : ''}" data-context="${value}">${esc(c.label)}</button>`).join('')}
+    </div>
+    <div class="toolbar" id="type-chips">
+      <button class="chip ${activeType === '' ? 'active' : ''}" data-type="">Cả hai loại</button>
       ${Object.entries(TYPES).map(([value, t]) => `
-        <button class="tab ${activeType === value ? 'active' : ''}" data-type="${value}">${esc(t.label)}</button>`).join('')}
+        <button class="chip ${activeType === value ? 'active' : ''}" data-type="${value}">
+          ${icon(t.icon, 14)}${esc(t.label)}</button>`).join('')}
     </div>
     <div class="toolbar">
       <div class="search">
@@ -68,17 +80,29 @@ export async function render(root, ctx) {
   inputQ.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(load, 240); });
   selectEq.addEventListener('change', load);
 
-  qs('#type-tabs', root).addEventListener('click', (e) => {
-    const tab = e.target.closest('[data-type]');
+  qs('#context-tabs', root).addEventListener('click', (e) => {
+    const tab = e.target.closest('[data-context]');
     if (!tab) return;
-    activeType = tab.dataset.type;
-    qs('#type-tabs', root).querySelectorAll('.tab')
+    activeContext = tab.dataset.context;
+    qs('#context-tabs', root).querySelectorAll('.tab')
       .forEach((t) => t.classList.toggle('active', t === tab));
     load();
   });
 
+  qs('#type-chips', root).addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-type]');
+    if (!chip) return;
+    activeType = chip.dataset.type;
+    qs('#type-chips', root).querySelectorAll('.chip')
+      .forEach((c) => c.classList.toggle('active', c === chip));
+    load();
+  });
+
   qs('#add-btn').addEventListener('click', () => {
-    openEditor(null, equipment.items, activeType || 'phieu_thao_tac', load);
+    openEditor(null, equipment.items, {
+      form_type: activeType || 'co_lap',
+      context: activeContext || 'bao_duong',
+    }, load);
   });
 
   list.addEventListener('click', async (e) => {
@@ -95,7 +119,8 @@ export async function render(root, ctx) {
     list.innerHTML = loading();
     try {
       const data = await api.forms({
-        form_type: activeType, q: inputQ.value.trim(), equipment_id: selectEq.value,
+        form_type: activeType, context: activeContext,
+        q: inputQ.value.trim(), equipment_id: selectEq.value,
       });
       list.innerHTML = data.items.length
         ? `<div class="list">${data.items.map(row).join('')}</div>
@@ -103,7 +128,7 @@ export async function render(root, ctx) {
         : emptyState({
             iconName: 'forms',
             title: 'Chưa có biểu mẫu nào',
-            text: 'Tạo phiếu thao tác mẫu và phiếu cô lập thiết bị cho từng dạng công tác để in nhanh khi cần.',
+            text: 'Tạo phiếu cô lập và phiếu tái lập cho từng trường hợp công tác để in nhanh khi cần.',
           });
     } catch (err) {
       list.innerHTML = errorState(err.message);
@@ -114,7 +139,8 @@ export async function render(root, ctx) {
 }
 
 function row(item) {
-  const type = TYPES[item.form_type] || TYPES.phieu_thao_tac;
+  const type = TYPES[item.form_type] || TYPES.co_lap;
+  const context = CONTEXTS[item.context];
   return `
     <a class="row-card" href="#/bieu-mau/${item.id}">
       <span class="thumb" style="background:var(--${type.tone}-soft);color:var(--${type.tone})">
@@ -123,7 +149,8 @@ function row(item) {
       <div class="row-body">
         <div class="row-title">${esc(item.title)}</div>
         <div class="row-meta">
-          <span class="badge badge-grey">${esc(type.label)}</span>
+          <span class="badge badge-${type.tone}">${esc(type.label)}</span>
+          ${context ? `<span class="badge badge-grey">${esc(context.label)}</span>` : ''}
           ${item.code ? `<span class="mono">${esc(item.code)}</span>` : ''}
           ${item.work_type ? `<span>${esc(item.work_type)}</span>` : ''}
           ${item.equipment_name ? `<span>${icon('equipment', 13)} ${esc(item.equipment_name)}</span>` : ''}
@@ -139,8 +166,9 @@ function row(item) {
     </a>`;
 }
 
-function openEditor(existing, equipmentItems, defaultType, onDone) {
-  const type = existing?.form_type || defaultType;
+function openEditor(existing, equipmentItems, defaults, onDone) {
+  const type = existing?.form_type || defaults.form_type;
+  const context = existing?.context || defaults.context;
   openModal({
     title: existing ? `Sửa biểu mẫu: ${existing.title}` : 'Thêm biểu mẫu',
     wide: true,
@@ -154,12 +182,19 @@ function openEditor(existing, equipmentItems, defaultType, onDone) {
           </div>
           <div class="field">
             <label>Mã biểu mẫu</label>
-            <input class="input" name="code" value="${esc(existing?.code || '')}" placeholder="VD: PTT-01">
+            <input class="input" name="code" value="${esc(existing?.code || '')}" placeholder="VD: PCL-01">
           </div>
         </div>
         <div class="field-row">
           <div class="field">
-            <label>Loại biểu mẫu</label>
+            <label>Trường hợp áp dụng</label>
+            <select class="select" name="context">
+              ${Object.entries(CONTEXTS).map(([value, c]) => `<option value="${value}"
+                ${context === value ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field">
+            <label>Loại phiếu</label>
             <select class="select" name="form_type">
               ${Object.entries(TYPES).map(([value, t]) => `<option value="${value}"
                 ${type === value ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}
@@ -263,12 +298,14 @@ async function renderDetail(root, id) {
   }
   if (isStale(root)) return;
 
-  const type = TYPES[form.form_type] || TYPES.phieu_thao_tac;
-  const isIsolation = form.form_type === 'phieu_co_lap';
+  const type = TYPES[form.form_type] || TYPES.co_lap;
+  const context = CONTEXTS[form.context];
+  const isIsolation = form.form_type === 'co_lap';
 
   setPage({
     title: form.title,
-    subtitle: [type.label, form.work_type, form.equipment_name].filter(Boolean).join(' · '),
+    subtitle: [type.label, context?.label, form.work_type, form.equipment_name]
+      .filter(Boolean).join(' · '),
     actions: `
       <button class="btn btn-sm" data-back>${icon('chevronLeft', 15)}Danh sách</button>
       <button class="btn btn-accent btn-sm" id="print-btn">${icon('printer', 15)}IN PHIẾU</button>
@@ -281,7 +318,7 @@ async function renderDetail(root, id) {
     <div class="grid two-col">
       <section class="card">
         <div class="card-head">
-          <h2 class="card-title">${isIsolation ? 'Biện pháp cô lập' : 'Trình tự thao tác'}</h2>
+          <h2 class="card-title">${isIsolation ? 'Biện pháp cô lập' : 'Trình tự tái lập'}</h2>
           <div class="card-actions"><span class="badge badge-grey">${form.rows.length} dòng</span></div>
         </div>
         ${form.rows.length ? `
@@ -317,7 +354,8 @@ async function renderDetail(root, id) {
         <section class="card">
           <div class="card-head"><h2 class="card-title">Thông tin biểu mẫu</h2></div>
           <dl class="kv" style="grid-template-columns:120px 1fr">
-            <dt>Loại</dt><dd>${esc(type.label)}</dd>
+            <dt>Loại phiếu</dt><dd>${esc(type.label)}</dd>
+            ${context ? `<dt>Trường hợp</dt><dd>${esc(context.label)}</dd>` : ''}
             ${form.code ? `<dt>Mã</dt><dd class="mono">${esc(form.code)}</dd>` : ''}
             ${form.work_type ? `<dt>Dạng công tác</dt><dd>${esc(form.work_type)}</dd>` : ''}
             ${form.equipment_name ? `<dt>Thiết bị</dt><dd>
@@ -337,7 +375,7 @@ async function renderDetail(root, id) {
   document.querySelector('[data-back]').addEventListener('click', () => navigate('/bieu-mau'));
   document.querySelector('#print-btn').addEventListener('click', () => printForm(form));
   document.querySelector('#edit-btn').addEventListener('click', () => {
-    openEditor(form, equipment.items, form.form_type, () => renderDetail(root, id));
+    openEditor(form, equipment.items, {}, () => renderDetail(root, id));
   });
   document.querySelector('#dup-btn').addEventListener('click', async () => {
     try {
