@@ -100,15 +100,31 @@ Hệ thống gồm hai phân hệ cấu hình độc lập.
 ### Phân hệ 1 — Truy hồi tài liệu (bge-m3, chạy nội bộ)
 
 Mặc định dùng **bge-m3** qua Ollama, xử lý tiếng Việt tốt và **tài liệu không ra khỏi mạng
-nhà máy**. Cài đặt:
+nhà máy**.
+
+**1. Cài Ollama** — tải tại <https://ollama.com/download> (Windows 10/11, macOS, Linux), chạy
+trình cài đặt. Cài xong Ollama chạy nền và tự khởi động cùng máy, lắng nghe ở cổng `11434`.
+
+**2. Tải mô hình** — mở Command Prompt:
 
 ```bash
-# Cài Ollama tại https://ollama.com rồi tải mô hình
-ollama pull bge-m3
+ollama pull bge-m3          # 1,2 GB
+ollama list                 # kiểm tra đã có bge-m3 chưa
 ```
 
-Chạy lần đầu hoặc sau khi đổi mô hình embedding, bấm **Dựng lại chỉ mục** trên trang Cấu hình
-để sinh vector cho tài liệu đã có.
+Máy chật ổ đĩa có thể dùng bản nén `ollama pull bge-m3:q4_0` (422 MB), khi đó phải đặt
+`OPENAI_EMBEDDING_MODEL=bge-m3:q4_0` trong `.env` cho khớp.
+
+**3. Kiểm tra** — mở <http://localhost:11434> phải thấy dòng `Ollama is running`. Trên trang
+**Cấu hình** của phần mềm, mục Embedding phải hiện nhãn xanh kèm số chiều vector.
+
+**4. Dựng lại chỉ mục** — bấm **Dựng lại chỉ mục tra cứu** trên trang Cấu hình để sinh vector
+cho tài liệu đã nạp trước đó. Chỉ cần làm lần đầu và mỗi khi đổi mô hình embedding.
+
+Không cần GPU: bge-m3 là mô hình nhỏ, chạy trên CPU đủ nhanh cho việc lập chỉ mục và tra cứu.
+
+Đặt Ollama trên máy khác thì sửa `OPENAI_BASE_URL` trỏ tới máy đó, và trên máy chạy Ollama
+phải đặt biến môi trường `OLLAMA_HOST=0.0.0.0` (mặc định Ollama chỉ nghe localhost).
 
 Ollama không chạy thì truy hồi **tự lùi về BM25** — hệ thống vẫn dùng được, trang Cấu hình báo
 đỏ kèm lý do. Muốn tắt hẳn nhánh ngữ nghĩa: đặt `EMBEDDING_PROVIDER=none`.
