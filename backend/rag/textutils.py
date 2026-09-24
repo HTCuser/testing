@@ -53,6 +53,31 @@ def tokenize(text: str) -> list[str]:
     return tokens + bigrams
 
 
+_RECORD_LINE_RE = re.compile(r"^(?:\[[^\]]{1,120}\]\s*)?[^:\n]{1,60}:\s*\S")
+
+
+def _best_line(text: str, terms: list[str], width: int) -> str | None:
+    """Dòng bản ghi khớp nhiều từ khoá nhất, hoặc None nếu đây không phải bảng."""
+    lines = [ln.strip() for ln in text.split("\n") if ln.strip()]
+    records = [ln for ln in lines if _RECORD_LINE_RE.match(ln)]
+    if len(records) * 2 <= len(lines):
+        return None
+
+    wanted = {t.replace("_", " ") for t in terms if t}
+    best, best_score = "", 0.0
+    for line in records:
+        low = normalize(line)
+        score = sum(len(t) for t in wanted if t in low)
+        if score > best_score:
+            best_score, best = score, line
+    if not best:
+        return None
+    # Bản ghi dài hơn cửa sổ vẫn trả nguyên dòng tới một mức: cắt ngang một bản
+    # ghi sự cố là mất luôn phần cách xử lý.
+    limit = width * 2
+    return best if len(best) <= limit else best[:limit].rstrip() + "…"
+
+
 def snippet(text: str, terms: list[str], width: int = 320) -> str:
     """Cắt đoạn trích quanh vùng tập trung nhiều từ khoá nhất.
 
@@ -63,6 +88,15 @@ def snippet(text: str, terms: list[str], width: int = 320) -> str:
     """
     if not text:
         return ""
+
+    # Nội dung bảng đã kết xuất thành từng dòng trọn vẹn (một thông số, hoặc một
+    # hiện tượng kèm nguyên nhân và cách xử lý). Với chúng, đơn vị có nghĩa là
+    # cả dòng: cắt theo cửa sổ ký tự sẽ mất phần cuối, mà phần cuối lại chính là
+    # giá trị cài đặt hoặc cách xử lý — thứ người đọc cần.
+    line = _best_line(text, terms, width)
+    if line is not None:
+        return line
+
     haystack = normalize(text)
 
     matches: list[tuple[int, str]] = []

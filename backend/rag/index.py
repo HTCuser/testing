@@ -165,34 +165,46 @@ class HybridIndex:
         semantic = self._vector_search(question, keep, top_k * 5)
 
         fused = _reciprocal_rank_fusion(lexical, semantic)
+
+        def build(chunk_id: int, score: float) -> Hit:
+            info = meta[chunk_id]
+            return Hit(
+                chunk_id=chunk_id,
+                document_id=info["document_id"],
+                doc_title=info["title"],
+                category=info["category"],
+                source_kind=info["source_kind"],
+                source_id=info["source_id"],
+                equipment_id=info["equipment_id"],
+                equipment_name=info["equipment_name"],
+                page=info["page"],
+                heading=info["heading"],
+                text=info["text"],
+                score=round(score, 5),
+                excerpt=snippet(info["text"], terms),
+            )
+
+        # Lượt một: giới hạn số đoạn mỗi tài liệu để một quy trình dài không
+        # chiếm hết kết quả. Lượt hai: lấp nốt chỗ còn trống bằng chính những
+        # đoạn vừa bị giới hạn gạt ra — bỏ hẳn chúng thì câu trả lời đúng có thể
+        # biến mất chỉ vì nằm thứ tư trong cùng một tài liệu.
         hits: list[Hit] = []
         per_doc: Counter = Counter()
+        overflow: list[tuple[int, float]] = []
         for chunk_id, score in fused:
             if len(hits) >= top_k:
                 break
-            info = meta[chunk_id]
-            # Giới hạn mỗi tài liệu chỉ để kết quả chung không bị một tài liệu
-            # chiếm hết; khi tìm trong đúng một tài liệu thì nó lại chặn mất kết quả.
-            if not document_id and per_doc[info["document_id"]] >= MAX_CHUNKS_PER_DOC:
+            document = meta[chunk_id]["document_id"]
+            if not document_id and per_doc[document] >= MAX_CHUNKS_PER_DOC:
+                overflow.append((chunk_id, score))
                 continue
-            per_doc[info["document_id"]] += 1
-            hits.append(
-                Hit(
-                    chunk_id=chunk_id,
-                    document_id=info["document_id"],
-                    doc_title=info["title"],
-                    category=info["category"],
-                    source_kind=info["source_kind"],
-                    source_id=info["source_id"],
-                    equipment_id=info["equipment_id"],
-                    equipment_name=info["equipment_name"],
-                    page=info["page"],
-                    heading=info["heading"],
-                    text=info["text"],
-                    score=round(score, 5),
-                    excerpt=snippet(info["text"], terms),
-                )
-            )
+            per_doc[document] += 1
+            hits.append(build(chunk_id, score))
+
+        for chunk_id, score in overflow:
+            if len(hits) >= top_k:
+                break
+            hits.append(build(chunk_id, score))
         return hits
 
     def _vector_search(self, question: str, keep, limit: int) -> list[tuple[int, float]]:

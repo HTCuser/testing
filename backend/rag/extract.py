@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from pathlib import Path
 
 from .textutils import clean_text
@@ -78,26 +79,48 @@ def _docx(path: Path) -> list[tuple[int | None, str]]:
     return [(None, body)]
 
 
+def _row_cells(row) -> list[tuple[str, bool]]:
+    """(nội dung ô, có phải phần kéo dài của ô gộp bên trái không).
+
+    Ô gộp được python-docx trả về lặp lại nguyên văn, phải bỏ bớt. Nhưng so
+    theo nội dung thì sai: trong ma trận cắt, hai cột máy cắt cạnh nhau cùng
+    đánh dấu "X" là hai máy cắt khác nhau chứ không phải một ô gộp — bỏ đi là
+    mất thông tin bảo vệ nào cắt máy cắt nào. Ô gộp thật dùng chung một phần tử
+    XML nên so theo phần tử mới đúng.
+    """
+    cells: list[tuple[str, bool]] = []
+    previous = None
+    for cell in row.cells:
+        cells.append((cell.text.strip().replace("\n", " "), cell._tc is previous))
+        previous = cell._tc
+    return cells
+
+
 def _row_values(row) -> list[str]:
-    return [c.text.strip().replace("\n", " ") for c in row.cells]
+    return [text for text, _ in _row_cells(row)]
+
+
+# Dòng dạng "Hiện tượng: ..." — có nhãn ngắn rồi mới tới nội dung.
+_LABELLED_RE = re.compile(r"^[^:\n]{1,30}:\s+\S")
 
 
 def _is_number(value: str) -> bool:
     return bool(value) and all(c.isdigit() or c in ",.-" for c in value)
 
 
-def _header_of(rows: list[list[str]]) -> tuple[list[str], list[list[str]]]:
+def _header_of(cells: list[list[tuple[str, bool]]]) -> tuple[list[str], int]:
     """Tách tiêu đề cột, gộp lại nếu tiêu đề trải hai tầng.
 
     Quy trình kỹ thuật hay dùng tiêu đề hai tầng: tầng trên gộp ngang ("Các bảo
     vệ của hệ thống"), tầng dưới chia nhỏ ("Tiếng Anh", "Tiếng Việt"). Lấy mỗi
     tầng trên làm tên cột sẽ gán nhầm nhãn cho toàn bộ dữ liệu bên dưới.
     """
-    top = rows[0]
+    top = [text for text, _ in cells[0]]
+    rows = [[text for text, _ in row] for row in cells]
     if len(rows) < 2:
-        return top, []
+        return top, 1
     sub = rows[1]
-    merged_top = any(top[i] and top[i] == top[i - 1] for i in range(1, len(top)))
+    merged_top = any(merged for _, merged in cells[0])
     filled = [v for v in sub if v]
     looks_like_labels = (
         bool(filled)
@@ -106,13 +129,13 @@ def _header_of(rows: list[list[str]]) -> tuple[list[str], list[list[str]]]:
         and any(sub[i] != top[i] for i in range(min(len(sub), len(top))))
     )
     if not (merged_top and looks_like_labels):
-        return top, rows[1:]
+        return top, 1
 
     combined = []
     for i in range(len(top)):
         t, s = top[i], sub[i] if i < len(sub) else ""
         combined.append(f"{t} - {s}" if s and t and s != t else (s or t))
-    return combined, rows[2:]
+    return combined, 2
 
 
 def _render_table(table) -> list[str]:
@@ -124,34 +147,51 @@ def _render_table(table) -> list[str]:
     đoạn chỉ mục khác. Ghép sẵn tên cột vào từng ô để mỗi dòng đứng một mình vẫn
     đọc được và tìm được.
     """
-    rows = [_row_values(r) for r in table.rows]
-    rows = [r for r in rows if any(r)]
-    if not rows:
+    cells = [_row_cells(r) for r in table.rows]
+    cells = [c for c in cells if any(text for text, _ in c)]
+    if not cells:
         return []
 
-    # Ô gộp bị python-docx lặp lại nguyên văn; đếm số giá trị khác nhau để biết
-    # dòng đó là tiêu đề nhóm (chỉ một nội dung trải hết chiều ngang).
-    if len(set(v for v in rows[0] if v)) < 2:
-        header, body_rows = [], rows
+    # Hàng đầu chỉ có một nội dung trải hết chiều ngang thì đó là tiêu đề nhóm
+    # chứ không phải tiêu đề cột.
+    if len({text for text, _ in cells[0] if text}) < 2:
+        header, skip = [], 0
     else:
-        header, body_rows = _header_of(rows)
+        header, skip = _header_of(cells)
+    body = cells[skip:]
 
     out: list[str] = []
     group = ""
-    for values in body_rows:
+    context = ""
+    pending = ""  # mô tả chung chưa được gộp vào bản ghi nào
+
+    def flush_pending() -> None:
+        nonlocal pending
+        if pending:
+            out.append(f"[{group}] {pending}" if group else pending)
+            pending = ""
+
+    for row in body:
+        values = [text for text, _ in row]
         distinct = [v for v in dict.fromkeys(values) if v]
         if len(distinct) == 1:
-            group = distinct[0].rstrip(":")
-            out.append(f"— {group}")
+            only = distinct[0].strip()
+            flush_pending()
+            # Bảng xử lý sự cố hay có ba tầng: tên sự cố, rồi một dòng trải hết
+            # chiều ngang dạng "Hiện tượng: ...", rồi các cặp nguyên nhân - xử
+            # lý. Dòng "Nhãn: nội dung" là mô tả của nhóm đang mở, coi nó là
+            # nhóm mới sẽ đẩy cả đoạn văn dài đó lên làm tiêu đề cho các dòng sau.
+            if group and _LABELLED_RE.match(only):
+                context = pending = only
+            else:
+                group, context = only.rstrip(":"), ""
+                out.append(f"— {group}")
             continue
 
         fields: list[str] = []
-        previous = None
-        for i, value in enumerate(values):
-            if not value or value == previous:
-                previous = value
+        for i, (value, merged) in enumerate(row):
+            if not value or merged:
                 continue
-            previous = value
             label = header[i].strip() if i < len(header) else ""
             if label and label.lower() not in ("stt", "tt"):
                 fields.append(f"{label}: {value}")
@@ -159,8 +199,13 @@ def _render_table(table) -> list[str]:
                 fields.append(value)
         if not fields:
             continue
-        line = "; ".join(fields)
+        # Ghép cả tên nhóm lẫn mô tả chung vào từng dòng để mỗi bản ghi đứng một
+        # mình vẫn đủ nghĩa: đọc ra một nguyên nhân mà không biết nó thuộc sự cố
+        # nào, hiện tượng ra sao thì không xử lý được.
+        pending = ""  # mô tả đã được gộp vào bản ghi này
+        line = f"{context}; {'; '.join(fields)}" if context else "; ".join(fields)
         out.append(f"[{group}] {line}" if group else line)
+    flush_pending()
     return out
 
 
