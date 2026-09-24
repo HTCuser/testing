@@ -157,8 +157,8 @@ export async function render(root) {
         <section class="card">
           <div class="card-head"><h2 class="card-title">Bảo trì</h2></div>
           <p style="margin:0 0 12px;line-height:1.7;font-size:13px">
-            Dựng lại chỉ mục khi nghi ngờ kết quả tra cứu không khớp với nội dung thư viện hiện tại.
-            Thao tác này không xoá dữ liệu.
+            Đọc lại toàn bộ tệp gốc và cắt đoạn lại từ đầu. Bấm sau mỗi lần cập nhật phần mềm
+            hoặc khi nghi ngờ kết quả tra cứu không khớp nội dung thư viện. Không xoá dữ liệu.
           </p>
           <button class="btn btn-primary" style="width:100%" id="reindex-btn-2">
             ${icon('refresh', 16)}Dựng lại chỉ mục tra cứu
@@ -171,7 +171,11 @@ export async function render(root) {
     btn.disabled = true;
     try {
       const result = await api.reindexAll();
-      toast(`Đã dựng lại chỉ mục: ${result.indexed_chunks} đoạn`, 'success');
+      const files = result.reextracted_files
+        ? `, đọc lại ${result.reextracted_files} tệp` : '';
+      const failed = result.failed_files ? `, ${result.failed_files} tệp lỗi` : '';
+      toast(`Đã dựng lại chỉ mục: ${result.indexed_chunks} đoạn${files}${failed}`,
+            result.failed_files ? 'error' : 'success');
       render(root);
     } catch (err) {
       toast(err.message, 'error');

@@ -104,8 +104,12 @@ def runtime_config() -> dict:
 
 @router.post("/reindex")
 def reindex_all() -> dict:
+    # Đọc lại tệp gốc trước: cách trích xuất và cắt đoạn thay đổi theo từng bản
+    # nâng cấp, mà nội dung đã cắt nằm sẵn trong CSDL. Chỉ dựng lại chỉ mục thì
+    # thư viện cũ vẫn giữ nguyên cách cắt cũ và người dùng tưởng bản vá không chạy.
+    files = indexer.reextract_all_files()
     index.rebuild()
     # Dựng lại chỉ mục phải sinh luôn vector, nếu không thì bật embedding trên
     # thư viện đã nạp sẽ không có vector nào và tìm kiếm ngữ nghĩa im lặng không chạy.
     embedded = indexer.embed_all_documents()
-    return {"indexed_chunks": index.size, **embedded}
+    return {"indexed_chunks": index.size, **files, **embedded}

@@ -137,6 +137,35 @@ phải đặt biến môi trường `OLLAMA_HOST=0.0.0.0` (mặc định Ollama 
 Ollama không chạy thì truy hồi **tự lùi về BM25** — hệ thống vẫn dùng được, trang Cấu hình báo
 đỏ kèm lý do. Muốn tắt hẳn nhánh ngữ nghĩa: đặt `EMBEDDING_PROVIDER=none`.
 
+### Đọc tài liệu ngay trên trình duyệt
+
+Trong trang chi tiết mỗi tài liệu, nút **MỞ TÀI LIỆU** hiển thị nguyên văn tài liệu ngay trên
+trình duyệt, giữ bảng và hình vẽ — không phải tải về rồi mở bằng Word. PDF và tệp văn bản được
+trình duyệt dựng trực tiếp; DOCX, XLSX và CSV được chuyển sang HTML ở phía máy chủ.
+
+Bản chuyển đổi được lưu lại trong `data/index/xem/` và dựng sẵn ngay lúc nạp tài liệu, nên mở
+lần nào cũng tức thì. Tệp gốc đổi thì bản cũ tự bỏ. Nút **Tải về** vẫn giữ nguyên tệp gốc cho
+ai cần bản Word.
+
+Máy chưa cài `mammoth` (`pip install -r requirements.txt`) vẫn mở được DOCX, nhưng bản dựng dự
+phòng chỉ có chữ và bảng, không có hình.
+
+### Dựng lại chỉ mục sau khi cập nhật phần mềm
+
+Nút **Dựng lại chỉ mục tra cứu** trên trang Cấu hình **đọc lại toàn bộ tệp gốc** rồi cắt đoạn
+lại từ đầu, chứ không chỉ nạp lại phần đã cắt trong CSDL. Cách trích xuất bảng và cắt đoạn còn
+được cải tiến theo từng bản, nên sau mỗi lần `git pull` hãy bấm nút này một lần — không phải
+xoá và tải lên lại từng tài liệu.
+
+### Soi thứ hạng khi một câu hỏi tra ra sai
+
+```bash
+python -m backend.chandoan "áp lực dầu làm việc định mức là bao nhiêu" -- "Áp lực làm việc định mức"
+```
+
+Lệnh in thứ hạng của cùng một đoạn ở nhánh từ khoá, nhánh ngữ nghĩa và ở kết quả hợp nhất, nên
+biết ngay lỗi nằm ở đâu thay vì đoán. Phần sau dấu `--` là từ khoá chắc chắn có trong đáp án.
+
 ### Phân hệ 2 — Sinh câu trả lời (Claude Haiku 4.5)
 
 | Biến | Mặc định | Tác dụng |
@@ -199,6 +228,8 @@ backend/
   db.py                Schema SQLite và tiện ích truy vấn
   models.py            Schema dữ liệu vào/ra (Pydantic)
   seed.py              Dữ liệu mẫu NMTĐ Hủa Na
+  docview.py           Dựng bản xem DOCX/XLSX/CSV để đọc thẳng trên trình duyệt
+  chandoan.py          Soi thứ hạng truy hồi của một câu hỏi (công cụ dòng lệnh)
   main.py              Khởi tạo FastAPI, phục vụ giao diện tĩnh
   rag/
     textutils.py       Chuẩn hoá, bỏ dấu, tách unigram + bigram tiếng Việt

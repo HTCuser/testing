@@ -122,6 +122,25 @@ def _is_admin_table(header: list[str], rows: list[list[str]]) -> bool:
     return len(flat & _ADMIN_LABELS) >= 3
 
 
+# Ô ký duyệt gộp cả ba nhãn vào một ô ("Chữ ký:\nHọ và tên: ...\nChức vụ: ...")
+# nên so nguyên ô với danh sách nhãn không bắt được. Quan trọng hơn, trang thủ
+# tục hay nằm chung một bảng với danh sách phân phối, và tuỳ tài liệu mà khối ký
+# rơi vào hàng thứ mấy — lọc theo cả bảng thì lúc trúng lúc trượt. Lọc theo từng
+# dòng đã kết xuất thì chắc chắn hơn và không đụng tới bảng kỹ thuật dài.
+_SIGN_FIELDS = ("chữ ký", "họ và tên", "họ tên", "chức vụ", "ngày ký")
+_ROLE_PHRASES = (
+    "người phê duyệt", "người biên soạn", "người soạn thảo",
+    "người kiểm tra", "người kiểm soát", "bộ phận chủ trì",
+)
+
+
+def _is_signature_line(text: str) -> bool:
+    low = text.lower()
+    if sum(f"{field}:" in low for field in _SIGN_FIELDS) >= 2:
+        return True
+    return any(phrase in low for phrase in _ROLE_PHRASES)
+
+
 def _is_number(value: str) -> bool:
     return bool(value) and all(c.isdigit() or c in ",.-" for c in value)
 
@@ -140,10 +159,15 @@ def _header_of(cells: list[list[tuple[str, bool]]]) -> tuple[list[str], int]:
     sub = rows[1]
     merged_top = any(merged for _, merged in cells[0])
     filled = [v for v in sub if v]
+    # Không cho phép ô số trong tầng hai. Tên cột không bao giờ là một con số,
+    # trong khi dòng dữ liệu đầu tiên hầu như luôn có: số thứ tự, số lượng bản.
+    # Nới điều kiện này ra thì bảng phân phối tài liệu ("1. | Giám đốc | 01")
+    # bị hiểu là tiêu đề hai tầng, tên cột biến thành "Tên đơn vị/bộ phận -
+    # Giám đốc" và bộ lọc trang thủ tục không còn nhận ra nó nữa.
     looks_like_labels = (
         bool(filled)
         and all(len(v) <= 40 for v in filled)
-        and sum(_is_number(v) for v in filled) * 2 <= len(filled)
+        and not any(_is_number(v) for v in filled)
         and any(sub[i] != top[i] for i in range(min(len(sub), len(top))))
     )
     if not (merged_top and looks_like_labels):
@@ -227,7 +251,7 @@ def _render_table(table) -> list[str]:
         line = f"{context}; {'; '.join(fields)}" if context else "; ".join(fields)
         out.append(f"[{group}] {line}" if group else line)
     flush_pending()
-    return out
+    return [line for line in out if not _is_signature_line(line)]
 
 
 def _xlsx(path: Path) -> list[tuple[int | None, str]]:

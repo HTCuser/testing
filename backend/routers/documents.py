@@ -5,9 +5,10 @@ from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 
 from ..config import ALLOWED_EXTENSIONS, MAX_UPLOAD_MB, UPLOAD_DIR
+from .. import docview
 from ..db import execute, query, query_one, rows_to_dicts
 from ..models import DocumentUpdate
 from ..rag.index import index
@@ -109,6 +110,39 @@ def get_document_text(document_id: int) -> str:
     if not rows:
         raise HTTPException(404, "Tài liệu chưa có nội dung đã lập chỉ mục")
     return "\n\n".join(r["text"] for r in rows)
+
+
+@router.get("/{document_id}/xem", response_class=HTMLResponse)
+def view_document(document_id: int):
+    """Mở tài liệu ngay trên trình duyệt, không phải tải về."""
+    row = query_one(
+        "SELECT title, filename, stored_name, category FROM documents WHERE id = ?",
+        (document_id,),
+    )
+    if row is None or not row["stored_name"]:
+        raise HTTPException(404, "Tài liệu này không có tệp đính kèm")
+    path = UPLOAD_DIR / row["stored_name"]
+    if not path.exists():
+        raise HTTPException(404, "Tệp không còn tồn tại trên máy chủ")
+
+    if not docview.needs_conversion(path):
+        # PDF và văn bản thuần: để trình duyệt tự dựng, giữ nguyên bản gốc.
+        return RedirectResponse(f"/api/documents/{document_id}/file", status_code=307)
+
+    try:
+        body = docview.render_body_cached(path)
+    except Exception as exc:
+        raise HTTPException(422, f"Không dựng được bản xem: {exc}")
+
+    meta = " · ".join(
+        part for part in (CATEGORIES.get(row["category"], ""), row["filename"]) if part
+    )
+    return HTMLResponse(docview.page(
+        row["title"] or row["filename"],
+        meta,
+        body,
+        f"/api/documents/{document_id}/file?tai_ve=true",
+    ))
 
 
 # Định dạng trình duyệt hiển thị được ngay, không cần tải về mở bằng ứng dụng khác.

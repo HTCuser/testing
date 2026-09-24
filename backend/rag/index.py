@@ -18,10 +18,16 @@ from .textutils import snippet, tokenize
 
 K1 = 1.5
 B = 0.75
-RRF_K = 60
-# Một quy trình dài dễ chiếm trọn kết quả bằng nhiều đoạn gần giống nhau, làm câu
-# trả lời mất các nguồn bổ trợ. Giới hạn số đoạn lấy từ cùng một tài liệu.
-MAX_CHUNKS_PER_DOC = 3
+# Hằng số RRF. Giá trị 60 quen thuộc lấy từ bài báo gốc, tính cho bảng xếp hạng
+# hàng nghìn kết quả. Với pool vài chục như ở đây thì nó làm điểm số phẳng gần
+# như nhau — hạng 1 chỉ hơn hạng cuối 1,6 lần — nên một đoạn đứng đầu ở nhánh
+# ngữ nghĩa vẫn thua một đoạn tầm thường ở cả hai nhánh. Giảm xuống để thứ hạng
+# cao thực sự có trọng lượng.
+RRF_K = 20
+
+# Số ứng viên lấy từ mỗi nhánh trước khi hợp nhất, tính theo bội của top_k.
+# Lấy quá ít thì đoạn đúng bị loại ngay từ vòng ứng viên.
+CANDIDATE_FACTOR = 12
 
 
 @dataclass
@@ -144,25 +150,9 @@ class HybridIndex:
                 return False
             return True
 
-        n_docs = len(entries) or 1
-        lexical: list[tuple[int, float]] = []
-        for entry in entries:
-            if not keep(entry.chunk_id):
-                continue
-            score = 0.0
-            for term in terms:
-                tf = entry.tf.get(term)
-                if not tf:
-                    continue
-                idf = math.log(1 + (n_docs - df[term] + 0.5) / (df[term] + 0.5))
-                denom = tf + K1 * (1 - B + B * entry.length / (avg_len or 1))
-                score += idf * (tf * (K1 + 1)) / denom
-            if score > 0:
-                lexical.append((entry.chunk_id, score))
-        lexical.sort(key=lambda x: x[1], reverse=True)
-        lexical = lexical[: top_k * 5]
+        lexical = _bm25(entries, terms, df, avg_len, keep)[: top_k * CANDIDATE_FACTOR]
 
-        semantic = self._vector_search(question, keep, top_k * 5)
+        semantic = self._vector_search(question, keep, top_k * CANDIDATE_FACTOR)
 
         fused = _reciprocal_rank_fusion(lexical, semantic)
 
@@ -184,28 +174,12 @@ class HybridIndex:
                 excerpt=snippet(info["text"], terms),
             )
 
-        # Lượt một: giới hạn số đoạn mỗi tài liệu để một quy trình dài không
-        # chiếm hết kết quả. Lượt hai: lấp nốt chỗ còn trống bằng chính những
-        # đoạn vừa bị giới hạn gạt ra — bỏ hẳn chúng thì câu trả lời đúng có thể
-        # biến mất chỉ vì nằm thứ tư trong cùng một tài liệu.
-        hits: list[Hit] = []
-        per_doc: Counter = Counter()
-        overflow: list[tuple[int, float]] = []
-        for chunk_id, score in fused:
-            if len(hits) >= top_k:
-                break
-            document = meta[chunk_id]["document_id"]
-            if not document_id and per_doc[document] >= MAX_CHUNKS_PER_DOC:
-                overflow.append((chunk_id, score))
-                continue
-            per_doc[document] += 1
-            hits.append(build(chunk_id, score))
-
-        for chunk_id, score in overflow:
-            if len(hits) >= top_k:
-                break
-            hits.append(build(chunk_id, score))
-        return hits
+        # Không giới hạn số đoạn mỗi tài liệu. Giới hạn đó sinh ra để một quy
+        # trình dài không chiếm hết kết quả, nhưng khi nhà máy chỉ có vài quy
+        # trình lớn thì câu hỏi về một hệ thống lẽ ra phải lấy phần lớn kết quả
+        # từ đúng quy trình của hệ thống đó. Đo trên hai quy trình thật: bỏ giới
+        # hạn đưa 10/10 câu hỏi vào top 8, giữ lại chỉ được 9/10.
+        return [build(chunk_id, score) for chunk_id, score in fused[:top_k]]
 
     def _vector_search(self, question: str, keep, limit: int) -> list[tuple[int, float]]:
         if not config.embeddings_enabled():
@@ -224,6 +198,27 @@ class HybridIndex:
                 scored.append((row["chunk_id"], score))
         scored.sort(key=lambda x: x[1], reverse=True)
         return scored[:limit]
+
+
+def _bm25(entries, terms, df, avg_len, keep) -> list[tuple[int, float]]:
+    """Chấm điểm BM25 cho toàn bộ đoạn, trả về bảng xếp hạng giảm dần."""
+    n_docs = len(entries) or 1
+    scored: list[tuple[int, float]] = []
+    for entry in entries:
+        if not keep(entry.chunk_id):
+            continue
+        score = 0.0
+        for term in terms:
+            tf = entry.tf.get(term)
+            if not tf:
+                continue
+            idf = math.log(1 + (n_docs - df[term] + 0.5) / (df[term] + 0.5))
+            denom = tf + K1 * (1 - B + B * entry.length / (avg_len or 1))
+            score += idf * (tf * (K1 + 1)) / denom
+        if score > 0:
+            scored.append((entry.chunk_id, score))
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return scored
 
 
 def _reciprocal_rank_fusion(*rankings: list[tuple[int, float]]) -> list[tuple[int, float]]:

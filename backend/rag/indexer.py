@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .. import config
+from ..docview import warm as warm_view
 from ..db import execute, query, query_one, tx
 from . import embeddings
 from .chunking import chunk_text
@@ -11,7 +12,7 @@ from .extract import extract
 from .index import index
 
 
-def index_file(document_id: int, path: Path) -> tuple[int, int]:
+def index_file(document_id: int, path: Path, *, embed: bool = True) -> tuple[int, int]:
     """Trích xuất, cắt đoạn và lập chỉ mục một tệp. Trả về (số ký tự, số chunk)."""
     sections = extract(path)
     chunks = []
@@ -23,7 +24,8 @@ def index_file(document_id: int, path: Path) -> tuple[int, int]:
         chunks.extend(page_chunks)
         order += len(page_chunks)
 
-    _replace_chunks(document_id, [(c.ord, c.page, c.heading, c.text) for c in chunks])
+    _replace_chunks(document_id, [(c.ord, c.page, c.heading, c.text) for c in chunks], embed=embed)
+    warm_view(path)
     return n_chars, len(chunks)
 
 
@@ -59,15 +61,50 @@ def remove_record(kind: str, record_id: int) -> None:
     index.rebuild()
 
 
-def _replace_chunks(document_id: int, rows: list[tuple]) -> None:
+def _replace_chunks(document_id: int, rows: list[tuple], *, embed: bool = True) -> None:
     with tx() as conn:
         conn.execute("DELETE FROM chunks WHERE document_id = ?", (document_id,))
         conn.executemany(
             "INSERT INTO chunks (document_id, ord, page, heading, text) VALUES (?, ?, ?, ?, ?)",
             [(document_id, *row) for row in rows],
         )
-    _embed_document(document_id)
+    if embed:
+        _embed_document(document_id)
     index.rebuild()
+
+
+def reextract_all_files() -> dict:
+    """Đọc lại toàn bộ tệp đã tải lên và cắt đoạn lại từ đầu.
+
+    Cách trích xuất và cắt đoạn còn được cải tiến (bảng thông số, trang ký duyệt,
+    ranh giới đoạn), nhưng nội dung đã cắt nằm sẵn trong CSDL nên chỉ dựng lại
+    chỉ mục thì thư viện cũ vẫn giữ nguyên cách cắt cũ. Không đọc lại tệp thì
+    người dùng phải xoá và tải lên lại từng tài liệu sau mỗi lần nâng cấp.
+    """
+    rows = query(
+        "SELECT id, stored_name FROM documents "
+        " WHERE source_kind = 'tep' AND stored_name <> '' ORDER BY id"
+    )
+    done = failed = 0
+    for row in rows:
+        path = config.UPLOAD_DIR / row["stored_name"]
+        if not path.exists():
+            failed += 1
+            continue
+        try:
+            n_chars, n_chunks = index_file(row["id"], path, embed=False)
+        except Exception as exc:
+            failed += 1
+            execute("UPDATE documents SET index_status = 'loi', index_error = ? WHERE id = ?",
+                    (str(exc), row["id"]))
+            continue
+        execute(
+            """UPDATE documents SET n_chars = ?, n_chunks = ?, index_status = 'da_lap_chi_muc',
+                      index_error = '' WHERE id = ?""",
+            (n_chars, n_chunks, row["id"]),
+        )
+        done += 1
+    return {"reextracted_files": done, "failed_files": failed}
 
 
 def embed_all_documents() -> dict:

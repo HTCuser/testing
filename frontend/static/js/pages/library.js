@@ -256,7 +256,7 @@ async function renderDetail(root, id) {
     actions: `
       <button class="btn btn-sm" data-back>${icon('chevronLeft', 15)}Thư viện</button>
       ${isFile && doc.stored_name ? `
-        <a class="btn btn-accent btn-sm" href="/api/documents/${id}/file" target="_blank" rel="noopener">
+        <a class="btn btn-accent btn-sm" href="/api/documents/${id}/xem" target="_blank" rel="noopener">
           ${icon('library', 15)}MỞ TÀI LIỆU</a>
         <a class="btn btn-sm" href="/api/documents/${id}/file?tai_ve=true">
           ${icon('download', 15)}Tải về</a>` : ''}
@@ -279,7 +279,8 @@ async function renderDetail(root, id) {
           <div id="doc-results">
             <p class="text-muted" style="margin:0">
               Nhập từ khoá để tìm thông số kỹ thuật hoặc cách xử lý sự cố ngay trong tài liệu này.
-              Muốn đọc toàn văn thì bấm <b>Mở tài liệu</b> ở trên.
+              Muốn đọc toàn văn thì bấm <b>Mở tài liệu</b> ở trên — tài liệu mở thẳng
+              trong trình duyệt, không phải tải về.
             </p>
           </div>`
         : `<div class="callout callout-danger">Chưa trích xuất được nội dung nên không tìm kiếm được.
