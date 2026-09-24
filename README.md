@@ -69,6 +69,7 @@ python -m venv .venv
 source .venv/bin/activate           # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 python -m backend.seed              # nạp dữ liệu mẫu Hủa Na (tuỳ chọn)
+python -m backend.seed --xoa        # gỡ dữ liệu mẫu khi đã có tài liệu thật
 python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
 ```
 
@@ -82,6 +83,13 @@ Tài liệu API tự sinh: <http://localhost:8000/docs>
 | `Address already in use` / cổng 8000 bận | Đổi cổng: `set PORT=8080` rồi chạy lại (Linux: `PORT=8080 ./run.sh`) |
 | Windows hỏi cho phép qua tường lửa | Chọn **Allow** nếu muốn máy khác trong mạng nhà máy truy cập được; chọn Cancel nếu chỉ dùng trên máy này |
 | Muốn nạp lại dữ liệu mẫu từ đầu | Xoá tệp `data/huana.db` rồi chạy lại script |
+
+> **Gỡ dữ liệu mẫu khi triển khai thật.** Thiết bị, quy trình, hồ sơ sự cố và phiếu thao tác
+> nạp sẵn là **nội dung minh hoạ do công cụ sinh ra, không phải quy trình đã được phê duyệt**.
+> Khi nhà máy đã nạp tài liệu thật, chạy `python -m backend.seed --xoa` để gỡ chúng đi: để lại
+> thì chúng vừa cạnh tranh sai trong kết quả tra cứu, vừa có nguy cơ bị vận hành viên đọc nhầm
+> thành quy trình chính thức. Lệnh này chỉ xoá đúng các mã do công cụ tạo, không đụng tới tài
+> liệu tải lên và bản ghi nhà máy tự nhập.
 
 ### Cho máy khác trong mạng nhà máy truy cập
 

@@ -17,7 +17,7 @@ from .routers import forms as forms_router
 from .routers import incidents as incidents_router
 from .routers import procedures as procedures_router
 from .models import EquipmentIn, FormIn, IncidentIn, ProcedureIn
-from .routers.equipment import create_equipment
+from .routers.equipment import create_equipment, delete_equipment
 
 EQUIPMENT = [
     dict(
@@ -679,5 +679,38 @@ def seed(force: bool = False) -> None:
     print(f"\nĐã nạp xong. Chỉ mục tra cứu: {index.size} đoạn.")
 
 
+def purge() -> None:
+    """Gỡ toàn bộ dữ liệu mẫu, giữ nguyên tài liệu và bản ghi do nhà máy nhập.
+
+    Dữ liệu mẫu là nội dung minh hoạ do công cụ sinh ra, không phải quy trình đã
+    được phê duyệt. Khi nhà máy đã nạp tài liệu thật thì nó vừa cạnh tranh sai
+    trong kết quả tra cứu, vừa có nguy cơ bị đọc nhầm thành quy trình chính thức.
+    Chỉ xoá đúng các mã do seed tạo ra nên bản ghi nhà máy tự nhập không bị đụng.
+    """
+    init_db()
+    removed = 0
+    groups = (
+        ("procedures", [p["code"] for p in PROCEDURES], procedures_router.delete_procedure),
+        ("incidents", [i["code"] for i in INCIDENTS], incidents_router.delete_incident),
+        ("forms", [f["code"] for f in FORMS], forms_router.delete_form),
+        ("equipment", [e["code"] for e in EQUIPMENT], delete_equipment),
+    )
+    for table, wanted, delete in groups:
+        for code in wanted:
+            row = query_one(f"SELECT id FROM {table} WHERE code = ?", (code,))
+            if row is None:
+                continue
+            delete(row["id"])
+            removed += 1
+            print(f"  - Đã gỡ {code}")
+
+    index.rebuild()
+    print(f"\nĐã gỡ {removed} bản ghi mẫu. Chỉ mục tra cứu còn: {index.size} đoạn.")
+    print("Tài liệu nhà máy tải lên và bản ghi tự nhập được giữ nguyên.")
+
+
 if __name__ == "__main__":
-    seed(force="--force" in sys.argv)
+    if "--xoa" in sys.argv:
+        purge()
+    else:
+        seed(force="--force" in sys.argv)
