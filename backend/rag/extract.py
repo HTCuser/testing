@@ -103,6 +103,24 @@ def _row_values(row) -> list[str]:
 # Dòng dạng "Hiện tượng: ..." — có nhãn ngắn rồi mới tới nội dung.
 _LABELLED_RE = re.compile(r"^[^:\n]{1,30}:\s+\S")
 
+# Bảng thủ tục ở đầu quy trình: trang ký duyệt và danh sách phân phối. Chúng
+# không bao giờ trả lời được câu hỏi kỹ thuật nhưng lại giàu từ chung nên hay
+# chen vào kết quả tra cứu.
+_ADMIN_LABELS = {
+    "chữ ký", "họ và tên", "họ tên", "chức vụ", "số bản", "nơi nhận",
+    "ngày ký", "người phê duyệt", "người soạn thảo", "người kiểm tra",
+    "tên đơn vị/bộ phận", "đơn vị nhận",
+}
+
+
+def _is_admin_table(header: list[str], rows: list[list[str]]) -> bool:
+    labels = {h.strip().lower() for h in header if h.strip()}
+    if labels and len(labels & _ADMIN_LABELS) * 2 >= len(labels):
+        return True
+    # Trang ký duyệt hay không có tiêu đề cột, nhãn nằm ngay trong ô.
+    flat = {v.strip().lower().rstrip(":") for row in rows[:6] for v in row if v.strip()}
+    return len(flat & _ADMIN_LABELS) >= 3
+
 
 def _is_number(value: str) -> bool:
     return bool(value) and all(c.isdigit() or c in ",.-" for c in value)
@@ -159,6 +177,9 @@ def _render_table(table) -> list[str]:
     else:
         header, skip = _header_of(cells)
     body = cells[skip:]
+
+    if _is_admin_table(header, [[t for t, _ in row] for row in body]):
+        return []
 
     out: list[str] = []
     group = ""

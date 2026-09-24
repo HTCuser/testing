@@ -49,6 +49,9 @@ def tokenize(text: str) -> list[str]:
     """
     syls = syllables(text)
     tokens = [s for s in syls if s.isdigit() or (len(s) > 1 and s not in STOPWORDS)]
+    # Không lọc hư từ khỏi bigram: bỏ dấu xong thì "vệ" (bảo vệ) trùng với "về",
+    # "cửa" (cửa van) trùng với "của" — lọc theo danh sách hư từ sẽ giết luôn
+    # "bảo vệ" và "cửa van", hai từ ghép quan trọng nhất của quy trình nhà máy.
     bigrams = [f"{a}_{b}" for a, b in zip(syls, syls[1:])]
     return tokens + bigrams
 
