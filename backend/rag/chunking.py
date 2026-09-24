@@ -10,6 +10,14 @@ from ..config import CHUNK_OVERLAP, CHUNK_SIZE
 # dựng, tránh sinh ra hàng loạt chunk vụn từ các mục ngắn.
 MIN_FILL = int(CHUNK_SIZE * 0.4)
 
+# Các dòng bảng đã kết xuất là bản ghi độc lập (một thông số, hoặc một hiện
+# tượng kèm nguyên nhân và cách xử lý). Gộp nhiều bản ghi không liên quan vào
+# một đoạn làm loãng mật độ từ khoá và khiến kết quả trả về dài dòng, nên các
+# đoạn toàn bản ghi được giữ ngắn hơn đoạn văn xuôi.
+RECORD_CHUNK_SIZE = max(320, int(CHUNK_SIZE * 0.45))
+
+_RECORD_RE = re.compile(r"^(?:\[[^\]]{1,80}\]\s*)?[^:\n]{1,60}:\s*\S")
+
 # Tiêu đề mục trong quy trình kỹ thuật Việt Nam: "## Tiêu đề", "Điều 12.",
 # "Chương III", "PHẦN II ...", "5.2.1 Trình tự thao tác".
 #
@@ -39,6 +47,14 @@ def _is_heading(line: str) -> bool:
         return True
     letters = [c for c in line if c.isalpha()]
     return len(letters) >= 6 and all(c.isupper() for c in letters)
+
+
+def _is_record(text: str) -> bool:
+    """Đoạn văn bản có phải gồm các bản ghi bảng đã kết xuất hay không."""
+    lines = [ln for ln in text.split("\n") if ln.strip()]
+    if not lines:
+        return False
+    return sum(bool(_RECORD_RE.match(ln)) for ln in lines) * 2 > len(lines)
 
 
 def _clean_heading(line: str) -> str:
@@ -85,7 +101,8 @@ def chunk_text(text: str, page: int | None = None, start_ord: int = 0) -> list[C
                 current, current_heading = unit, heading
                 continue
             starts_new_section = heading != current_heading and len(current) >= MIN_FILL
-            if not starts_new_section and len(current) + len(unit) + 1 <= CHUNK_SIZE:
+            cap = RECORD_CHUNK_SIZE if _is_record(unit) and _is_record(current) else CHUNK_SIZE
+            if not starts_new_section and len(current) + len(unit) + 1 <= cap:
                 current = f"{current}\n{unit}"
                 continue
             emit(current, current_heading)
@@ -98,12 +115,26 @@ def chunk_text(text: str, page: int | None = None, start_ord: int = 0) -> list[C
 
 
 def _split_oversized(body: str) -> list[str]:
-    """Tách khối dài thành các mảnh không vượt CHUNK_SIZE, ưu tiên ranh giới đoạn/câu."""
+    """Tách khối dài thành các mảnh không vượt CHUNK_SIZE.
+
+    Ưu tiên ranh giới đoạn, rồi đến ranh giới dòng, cuối cùng mới đến câu. Bước
+    theo dòng là để giữ nguyên các dòng bảng đã kết xuất: mỗi dòng là một bản
+    ghi trọn vẹn (thông số, hoặc hiện tượng - nguyên nhân - xử lý), cắt giữa
+    dòng sẽ làm mất nửa bản ghi và truy hồi ra mảnh vô nghĩa.
+    """
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n", body) if p.strip()]
     units: list[str] = []
     for para in paragraphs:
         if len(para) <= CHUNK_SIZE:
             units.append(para)
+            continue
+        lines = [ln.strip() for ln in para.split("\n") if ln.strip()]
+        if len(lines) > 1:
+            for line in lines:
+                if len(line) <= CHUNK_SIZE:
+                    units.append(line)
+                else:
+                    units.extend(_split_sentences(line))
             continue
         units.extend(_split_sentences(para))
     return units

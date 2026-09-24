@@ -54,19 +54,38 @@ def tokenize(text: str) -> list[str]:
 
 
 def snippet(text: str, terms: list[str], width: int = 320) -> str:
-    """Cắt đoạn trích quanh vị trí khớp từ khoá đầu tiên."""
+    """Cắt đoạn trích quanh vùng tập trung nhiều từ khoá nhất.
+
+    Bám vào lần khớp đầu tiên của từ khoá dài nhất là không đủ: một đoạn chỉ mục
+    chứa nhiều bản ghi thì từ chung như "nguyên nhân" xuất hiện ngay đầu đoạn,
+    còn bản ghi thật sự trả lời câu hỏi lại nằm ở giữa. Khi đó đoạn trích hiện
+    ra không chứa câu trả lời dù truy hồi đã đúng.
+    """
     if not text:
         return ""
     haystack = normalize(text)
-    best = -1
-    for term in sorted(terms, key=len, reverse=True):
-        pos = haystack.find(term.replace("_", " "))
-        if pos != -1:
-            best = pos
-            break
-    if best == -1:
+
+    matches: list[tuple[int, str]] = []
+    for term in {t.replace("_", " ") for t in terms if t}:
+        start = 0
+        while len(matches) < 400:
+            pos = haystack.find(term, start)
+            if pos == -1:
+                break
+            matches.append((pos, term))
+            start = pos + max(1, len(term))
+    if not matches:
         return text[:width].strip() + ("…" if len(text) > width else "")
-    start = max(0, best - width // 3)
+
+    matches.sort()
+    best, best_score = matches[0][0], -1.0
+    for pos, _ in matches:
+        seen = {t for p, t in matches if pos <= p < pos + width}
+        score = sum(len(t) for t in seen)
+        if score > best_score:
+            best_score, best = score, pos
+
+    start = max(0, best - width // 6)
     end = min(len(text), start + width)
     # Lùi/tiến tới ranh giới từ để đoạn trích không bị cắt giữa chừng một chữ.
     if start > 0:
