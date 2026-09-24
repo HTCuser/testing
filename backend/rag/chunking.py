@@ -161,8 +161,21 @@ def _split_sentences(para: str) -> list[str]:
 
 
 def _tail(text: str) -> str:
+    """Phần lặp lại ở đầu đoạn sau, để câu trả lời không bị mất ở chỗ giáp ranh."""
     if len(text) <= CHUNK_OVERLAP:
         return text
+
+    # Khối bản ghi: chồng lấn phải là trọn một bản ghi. Cắt theo số ký tự sẽ lặp
+    # lại nửa bản ghi, sinh ra đoạn mở đầu cụt ngang vừa không đọc được vừa
+    # không tìm được.
+    if _is_record(text):
+        last = text.rsplit("\n", 1)[-1].strip()
+        return last if len(last) <= CHUNK_SIZE // 2 else ""
+
+    # Văn xuôi: lùi về đầu câu hoặc đầu dòng nếu có, nếu không thì về ranh giới từ.
     tail = text[-CHUNK_OVERLAP:]
+    boundary = re.search(r"(?<=[.;:!?])\s+|\n", tail)
+    if boundary:
+        return tail[boundary.end():]
     cut = tail.find(" ")
     return tail[cut + 1:] if cut != -1 else tail
