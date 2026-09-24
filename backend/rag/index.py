@@ -116,6 +116,7 @@ class HybridIndex:
         category: str | None = None,
         equipment_id: int | None = None,
         source_kind: str | None = None,
+        document_id: int | None = None,
     ) -> list[Hit]:
         self.ensure_ready()
         top_k = top_k or config.TOP_K
@@ -138,6 +139,8 @@ class HybridIndex:
             if source_kind and info["source_kind"] != source_kind:
                 return False
             if equipment_id and info["equipment_id"] != equipment_id:
+                return False
+            if document_id and info["document_id"] != document_id:
                 return False
             return True
 
@@ -168,7 +171,9 @@ class HybridIndex:
             if len(hits) >= top_k:
                 break
             info = meta[chunk_id]
-            if per_doc[info["document_id"]] >= MAX_CHUNKS_PER_DOC:
+            # Giới hạn mỗi tài liệu chỉ để kết quả chung không bị một tài liệu
+            # chiếm hết; khi tìm trong đúng một tài liệu thì nó lại chặn mất kết quả.
+            if not document_id and per_doc[info["document_id"]] >= MAX_CHUNKS_PER_DOC:
                 continue
             per_doc[info["document_id"]] += 1
             hits.append(

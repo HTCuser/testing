@@ -12,8 +12,10 @@ export const meta = {
   subtitle: 'Tài liệu thiết bị, quy trình, sơ đồ và bài học kinh nghiệm đã nạp vào hệ thống',
 };
 
+// Nhãn nói theo việc vận hành viên quan tâm — tài liệu có tra cứu được hay
+// không — chứ không nói theo cơ chế bên trong.
 const STATUS = {
-  da_lap_chi_muc: ['badge-green', 'Đã lập chỉ mục'],
+  da_lap_chi_muc: ['badge-green', 'Sẵn sàng tra cứu'],
   dang_xu_ly: ['badge-amber', 'Đang xử lý'],
   cho_xu_ly: ['badge-grey', 'Chờ xử lý'],
   loi: ['badge-red', 'Lỗi nạp'],
@@ -83,7 +85,7 @@ export async function render(root, ctx) {
       e.preventDefault();
       e.stopPropagation();
       const ok = await confirmDialog(
-        'Xoá tài liệu này khỏi thư viện? Nội dung đã lập chỉ mục cũng sẽ bị gỡ bỏ.',
+        'Xoá tài liệu này khỏi thư viện? Tệp gốc và khả năng tra cứu trong tài liệu sẽ mất.',
         { title: 'Xoá tài liệu' },
       );
       if (!ok) return;
@@ -134,7 +136,6 @@ function docRow(item) {
         <div class="row-meta">
           <span class="badge badge-grey">${esc(item.category_label)}</span>
           ${item.equipment_name ? `<span>${icon('equipment', 13)} ${esc(item.equipment_name)}</span>` : ''}
-          <span>${item.n_chunks} đoạn</span>
           ${isFile && item.size_bytes ? `<span>${esc(formatBytes(item.size_bytes))}</span>` : ''}
           <span>${esc(formatDateTime(item.created_at))}</span>
         </div>
@@ -196,12 +197,12 @@ function openUpload(categories, equipment, onDone) {
           <textarea class="textarea" name="description" style="min-height:60px"></textarea>
         </div>
         <div class="callout callout-info">
-          Hệ thống sẽ tự trích xuất văn bản, cắt đoạn và lập chỉ mục. PDF bản scan cần OCR trước khi tải lên.
+          Hệ thống tự đọc nội dung để tra cứu được ngay; tệp gốc vẫn giữ nguyên để mở ra đọc. PDF bản scan cần OCR trước khi tải lên.
         </div>
       </form>`,
     footer: `
       <button class="btn" data-close>Huỷ</button>
-      <button class="btn btn-primary" id="do-upload">${icon('upload', 16)}Tải lên và lập chỉ mục</button>`,
+      <button class="btn btn-primary" id="do-upload">${icon('upload', 16)}Tải lên tài liệu</button>`,
     onMount(root, close) {
       const btn = qs('#do-upload', root);
       btn.addEventListener('click', async () => {
@@ -215,17 +216,26 @@ function openUpload(categories, equipment, onDone) {
           if (result.index_status === 'loi') {
             toast(`Đã lưu tệp nhưng không nạp được nội dung: ${result.index_error}`, 'error', 8000);
           } else {
-            toast(`Đã nạp "${result.title}" — ${result.n_chunks} đoạn`, 'success');
+            toast(`Đã nạp "${result.title}", tra cứu được ngay`, 'success');
           }
           onDone();
         } catch (err) {
           toast(err.message, 'error', 7000);
           btn.disabled = false;
-          btn.innerHTML = 'Tải lên và lập chỉ mục';
+          btn.innerHTML = 'Tải lên tài liệu';
         }
       });
     },
   });
+}
+
+function passage(item) {
+  const where = [item.heading, item.page ? `trang ${item.page}` : ''].filter(Boolean).join(' · ');
+  return `
+    <div class="callout" style="margin-bottom:10px">
+      ${where ? `<div class="text-muted" style="font-size:12px;margin-bottom:5px">${esc(where)}</div>` : ''}
+      <div style="line-height:1.7">${esc(item.excerpt)}</div>
+    </div>`;
 }
 
 async function renderDetail(root, id) {
@@ -245,7 +255,11 @@ async function renderDetail(root, id) {
     subtitle: `${doc.category_label}${doc.equipment_name ? ' · ' + doc.equipment_name : ''}`,
     actions: `
       <button class="btn btn-sm" data-back>${icon('chevronLeft', 15)}Thư viện</button>
-      ${isFile && doc.stored_name ? `<a class="btn btn-sm" href="/api/documents/${id}/file">${icon('download', 15)}Tải tệp</a>` : ''}
+      ${isFile && doc.stored_name ? `
+        <a class="btn btn-accent btn-sm" href="/api/documents/${id}/file" target="_blank" rel="noopener">
+          ${icon('library', 15)}MỞ TÀI LIỆU</a>
+        <a class="btn btn-sm" href="/api/documents/${id}/file?tai_ve=true">
+          ${icon('download', 15)}Tải về</a>` : ''}
       ${isFile ? `<button class="btn btn-sm" id="reindex">${icon('refresh', 15)}Nạp lại</button>` : ''}`,
   });
 
@@ -254,13 +268,22 @@ async function renderDetail(root, id) {
     <div class="grid two-col">
       <section class="card">
         <div class="card-head">
-          <h2 class="card-title">Nội dung đã lập chỉ mục</h2>
-          <div class="card-actions"><span class="badge badge-grey">${doc.chunks.length} đoạn</span></div>
+          <h2 class="card-title">Tìm trong tài liệu này</h2>
         </div>
-        ${doc.chunks.length
-          ? `<div class="doc-text">${doc.chunks.map((c, i) => `<b>[${i + 1}]${c.heading ? ' ' + esc(c.heading) : ''}</b>\n${esc(c.text)}`).join('\n\n')}</div>`
-          : `<div class="callout callout-danger">Chưa trích xuất được nội dung.
-              ${doc.index_error ? esc(doc.index_error) : ''}</div>`}
+        ${doc.n_chars ? `
+          <div class="search" style="margin-bottom:14px">
+            ${icon('search', 17)}
+            <input class="input" id="doc-q" autocomplete="off"
+                   placeholder="VD: áp lực dầu định mức, đèn LOW PRESSURE sáng, trình tự mở cửa van…">
+          </div>
+          <div id="doc-results">
+            <p class="text-muted" style="margin:0">
+              Nhập từ khoá để tìm thông số kỹ thuật hoặc cách xử lý sự cố ngay trong tài liệu này.
+              Muốn đọc toàn văn thì bấm <b>Mở tài liệu</b> ở trên.
+            </p>
+          </div>`
+        : `<div class="callout callout-danger">Chưa trích xuất được nội dung nên không tìm kiếm được.
+            ${doc.index_error ? esc(doc.index_error) : ''}</div>`}
       </section>
 
       <section class="card">
@@ -290,6 +313,32 @@ async function renderDetail(root, id) {
 
   document.querySelector('[data-back]')?.addEventListener('click', () => navigate('/thu-vien'));
   qs('#ask-about', root).addEventListener('click', () => navigate('/tro-ly', { q: doc.title }));
+
+  const inputQ = document.querySelector('#doc-q');
+  if (inputQ) {
+    const results = qs('#doc-results', root);
+    let timer;
+    const run = async () => {
+      const q = inputQ.value.trim();
+      if (!q) {
+        results.innerHTML = '<p class="text-muted" style="margin:0">Nhập từ khoá để tìm trong tài liệu này.</p>';
+        return;
+      }
+      results.innerHTML = loading();
+      try {
+        const data = await api.get(`/api/documents/${id}/search`, { q });
+        if (isStale(root)) return;
+        results.innerHTML = data.items.length
+          ? `<div class="text-muted" style="margin-bottom:10px">${data.total} đoạn khớp</div>`
+            + data.items.map(passage).join('')
+          : '<p class="text-muted" style="margin:0">Không tìm thấy đoạn nào khớp trong tài liệu này.</p>';
+      } catch (err) {
+        results.innerHTML = errorState(err.message);
+      }
+    };
+    inputQ.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(run, 260); });
+    inputQ.focus();
+  }
   document.querySelector('#reindex')?.addEventListener('click', async (e) => {
     e.target.disabled = true;
     try {

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse
@@ -73,11 +74,33 @@ def get_document(document_id: int) -> dict:
         raise HTTPException(404, "Không tìm thấy tài liệu")
     item = dict(row)
     item["category_label"] = CATEGORIES.get(item["category"], item["category"])
-    item["chunks"] = rows_to_dicts(
-        query("SELECT id, ord, page, heading, text FROM chunks WHERE document_id = ? ORDER BY ord",
-              (document_id,))
-    )
+    # Không trả về toàn bộ đoạn chỉ mục nữa: đó là dữ liệu phục vụ truy hồi, đọc
+    # trực tiếp thì rời rạc và khó hiểu. Người dùng mở tệp gốc để đọc, và dùng
+    # /search để tìm trong tài liệu.
     return item
+
+
+@router.get("/{document_id}/search")
+def search_in_document(document_id: int, q: str = "", top_k: int = 10) -> dict:
+    if query_one("SELECT id FROM documents WHERE id = ?", (document_id,)) is None:
+        raise HTTPException(404, "Không tìm thấy tài liệu")
+    if not q.strip():
+        return {"items": [], "total": 0}
+    hits = index.search(q, top_k=min(top_k, 30), document_id=document_id)
+    return {
+        "items": [
+            {
+                "n": i,
+                "page": h.page,
+                "heading": h.heading,
+                "excerpt": h.excerpt,
+                "text": h.text,
+                "score": h.score,
+            }
+            for i, h in enumerate(hits, start=1)
+        ],
+        "total": len(hits),
+    }
 
 
 @router.get("/{document_id}/text", response_class=PlainTextResponse)
@@ -88,14 +111,35 @@ def get_document_text(document_id: int) -> str:
     return "\n\n".join(r["text"] for r in rows)
 
 
+# Định dạng trình duyệt hiển thị được ngay, không cần tải về mở bằng ứng dụng khác.
+INLINE_TYPES = {
+    ".pdf": "application/pdf",
+    ".txt": "text/plain; charset=utf-8",
+    ".md": "text/plain; charset=utf-8",
+}
+
+
 @router.get("/{document_id}/file")
-def download_document(document_id: int):
+def download_document(document_id: int, tai_ve: bool = False):
     row = query_one("SELECT filename, stored_name FROM documents WHERE id = ?", (document_id,))
     if row is None or not row["stored_name"]:
         raise HTTPException(404, "Tài liệu này không có tệp đính kèm")
     path = UPLOAD_DIR / row["stored_name"]
     if not path.exists():
         raise HTTPException(404, "Tệp không còn tồn tại trên máy chủ")
+
+    media_type = INLINE_TYPES.get(path.suffix.lower())
+    if media_type and not tai_ve:
+        # Mở thẳng trong trình duyệt. Tên tệp đặt trong header riêng vì tham số
+        # filename của FileResponse luôn ép thành tải về.
+        return FileResponse(
+            path,
+            media_type=media_type,
+            headers={
+                "Content-Disposition":
+                    f'inline; filename*=UTF-8\'\'{quote(row["filename"])}'
+            },
+        )
     return FileResponse(path, filename=row["filename"])
 
 
