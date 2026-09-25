@@ -79,6 +79,10 @@ def runtime_config() -> dict:
             "enabled": config.generation_enabled(),
             "model": config.ANTHROPIC_MODEL if config.generation_enabled() else "",
             "quota": usage.status(),
+            # Tên file cấu hình đọc được, để trang Cấu hình chỉ ra ngay khi
+            # người dùng đặt key vào sai file hoặc sai thư mục.
+            "env_file": config.ENV_FILE.name if config.ENV_FILE else "",
+            "base_dir": str(config.BASE_DIR),
         },
         "embeddings": {
             "enabled": config.embeddings_enabled(),

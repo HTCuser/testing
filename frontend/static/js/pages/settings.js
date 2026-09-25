@@ -58,8 +58,13 @@ export async function render(root) {
               các đoạn tài liệu liên quan nhất (chế độ trích lược) thay vì câu trả lời tổng hợp.
             </p>
             <div class="callout">
-              Để bật: tạo file <code>.env</code> ở thư mục gốc dự án, thêm dòng
-              <code>ANTHROPIC_API_KEY=...</code> rồi khởi động lại máy chủ.
+              ${config.generation.env_file
+                ? `Đã đọc file <code>${esc(config.generation.env_file)}</code> nhưng trong đó chưa có
+                   dòng <code>ANTHROPIC_API_KEY=...</code> có giá trị. Mở file, dán key sau dấu
+                   <code>=</code>, lưu lại rồi khởi động lại máy chủ.`
+                : `Không tìm thấy file <code>.env</code> trong thư mục
+                   <code>${esc(config.generation.base_dir)}</code>. Tạo file đó, thêm dòng
+                   <code>ANTHROPIC_API_KEY=...</code> rồi khởi động lại máy chủ.`}
             </div>`}
         </section>
 

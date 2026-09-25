@@ -12,11 +12,36 @@ FRONTEND_DIR = BASE_DIR / "frontend"
 DB_PATH = DATA_DIR / "huana.db"
 
 
+def _env_file() -> Path | None:
+    # Notepad trên Windows lặng lẽ thêm đuôi .txt khi lưu, và Explorer mặc định
+    # ẩn đuôi file nên người dùng thấy đúng tên ".env" mà phần mềm không đọc
+    # được. Chấp nhận luôn ".env.txt" thay vì bắt từng người đi đổi tên.
+    for name in (".env", ".env.txt"):
+        candidate = BASE_DIR / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _read_env_text(path: Path) -> str:
+    raw = path.read_bytes()
+    # utf-8-sig bỏ được BOM mà Notepad hay chèn vào đầu file — không bỏ thì
+    # khoá ở dòng đầu thành "\ufeffANTHROPIC_API_KEY" và không bao giờ khớp.
+    try:
+        return raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        # Notepad đời cũ lưu theo bảng mã ANSI. Khoá và giá trị cấu hình đều là
+        # ASCII, chỉ phần chú thích tiếng Việt bị lỗi dấu — không ảnh hưởng.
+        return raw.decode("cp1252", errors="replace")
+
+
+ENV_FILE = _env_file()
+
+
 def _load_dotenv() -> None:
-    env_file = BASE_DIR / ".env"
-    if not env_file.exists():
+    if ENV_FILE is None:
         return
-    for raw in env_file.read_text(encoding="utf-8").splitlines():
+    for raw in _read_env_text(ENV_FILE).splitlines():
         line = raw.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
