@@ -7,6 +7,7 @@ import * as incidents from './pages/incidents.js';
 import * as library from './pages/library.js';
 import { createProceduresPage } from './pages/procedures.js';
 import { setOrg } from './print.js';
+import * as tickets from './pages/tickets.js';
 import * as settings from './pages/settings.js';
 import { register, setNavigationHook, start } from './router.js';
 import { buildShell, highlightNav, resetView, setFooter, setPage } from './shell.js';
@@ -43,6 +44,9 @@ const PAGES = [
   ['/bao-duong/:id', maintenance],
   ['/su-co', incidents],
   ['/su-co/:id', incidents],
+  ['/phieu-thao-tac', tickets],
+  ['/phieu-thao-tac/:id', tickets],
+  ['/phieu-thao-tac/lap/:tid', tickets],
   ['/bieu-mau', forms],
   ['/bieu-mau/:id', forms],
   ['/cau-hinh', settings],

@@ -8,6 +8,7 @@ Word, và tải về mỗi lần cũng làm rơi mất ngữ cảnh đang tra. T
 from __future__ import annotations
 
 import html
+import re
 from pathlib import Path
 
 from . import config
@@ -81,7 +82,77 @@ def _docx_html(path: Path) -> str:
         # đúng thứ tự đoạn văn và bảng — đủ để đọc quy trình.
         return _docx_html_basic(path)
     with path.open("rb") as f:
-        return mammoth.convert_to_html(f).value
+        body = mammoth.convert_to_html(f).value
+    return _header_html(path) + body
+
+
+def _header_lines(path: Path) -> list[str]:
+    """Chữ trong header của file, bỏ các trường tự động như số trang.
+
+    mammoth bỏ qua header, mà phiếu thao tác của nhà máy lại để số phiếu ở
+    header; quy trình thì để mã hiệu, lần ban hành. Thiếu phần này thì bản xem
+    trên trình duyệt mất đúng thông tin nhận dạng tài liệu.
+    """
+    import docx
+    from docx.oxml.ns import qn
+
+    doc = docx.Document(str(path))
+    section = doc.sections[0]
+    headers = [section.header]
+    if section.different_first_page_header_footer:
+        headers.insert(0, section.first_page_header)
+
+    lines: list[str] = []
+    for header in headers:
+        for p in header._element.iter(qn("w:p")):
+            text, depth = [], 0
+            for el in p.iter():
+                # Trường phức (PAGE, NUMPAGES): chỉ còn giá trị lưu tạm lúc
+                # soạn, hiển thị ra sẽ sai. Bỏ phần nằm giữa begin và end.
+                if el.tag == qn("w:fldChar"):
+                    kind = el.get(qn("w:fldCharType"))
+                    depth += 1 if kind == "begin" else -1 if kind == "end" else 0
+                elif el.tag == qn("w:t") and depth == 0:
+                    parent = el.getparent()
+                    inside_simple = parent is not None and parent.getparent() is not None \
+                        and parent.getparent().tag == qn("w:fldSimple")
+                    if not inside_simple:
+                        text.append(el.text or "")
+            line = "".join(text).strip()
+            if line:
+                lines.append(line)
+
+    # Ghép nhãn đứng riêng ("Số phiếu:") với giá trị ở dòng sau; nhãn không có
+    # giá trị (giá trị là trường số trang đã bỏ) thì bỏ luôn.
+    merged: list[str] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if line.endswith(":"):
+            nxt = lines[i + 1] if i + 1 < len(lines) else ""
+            if nxt and not nxt.endswith(":"):
+                merged.append(f"{line} {nxt}")
+                i += 2
+                continue
+            i += 1
+            continue
+        merged.append(line)
+        i += 1
+    # Số trang vô nghĩa trên trình duyệt (cả tài liệu là một trang cuộn), và
+    # phần còn sót của trường số trang như "Trang số: /5" chỉ gây rối.
+    merged = [line for line in merged if not re.match(r"(?i)^trang(\s+số)?\b", line)]
+    return list(dict.fromkeys(merged))
+
+
+def _header_html(path: Path) -> str:
+    try:
+        lines = _header_lines(path)
+    except Exception:
+        return ""
+    if not lines:
+        return ""
+    items = "".join(f"<div>{html.escape(line)}</div>" for line in lines)
+    return f'<div class="doc-header">{items}</div>'
 
 
 def _docx_html_basic(path: Path) -> str:
@@ -174,6 +245,8 @@ _PAGE = """<!doctype html>
   main {{ max-width: 960px; margin: 24px auto; padding: 36px 44px; background: #fff;
           border-radius: 10px; box-shadow: 0 1px 3px rgba(15, 23, 42, .12); }}
   main img {{ max-width: 100%; height: auto; }}
+  .doc-header {{ text-align: right; font-size: 13px; color: #334155; border-bottom: 1px solid #cbd5e1;
+                 padding-bottom: 8px; margin-bottom: 18px; }}
   h1, h2, h3, h4 {{ line-height: 1.35; color: #0f172a; }}
   table {{ border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14px; }}
   th, td {{ border: 1px solid #cbd5e1; padding: 6px 9px; vertical-align: top;

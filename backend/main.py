@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from . import config
 from .db import init_db
 from .rag.index import index
-from .routers import chat, documents, equipment, forms, incidents, procedures, system
+from .routers import chat, documents, equipment, forms, incidents, procedures, system, tickets
 
 
 @asynccontextmanager
@@ -30,7 +30,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-for module in (system, chat, documents, equipment, procedures, incidents, forms):
+for module in (system, chat, documents, equipment, procedures, incidents, forms, tickets):
     app.include_router(module.router)
 
 

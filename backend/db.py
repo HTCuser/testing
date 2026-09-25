@@ -145,6 +145,50 @@ CREATE TABLE IF NOT EXISTS chat_logs (
 -- Đếm số lượt đã gọi mô hình sinh, tách theo ngày và theo tháng. Đếm riêng ở
 -- đây thay vì đếm lại chat_logs để hạn mức không bị reset khi xoá nhật ký và
 -- để mỗi lần kiểm tra chỉ đọc một dòng.
+-- Mẫu phiếu thao tác: file Word của nhà máy, vận hành viên đánh dấu các ô cần
+-- điền bằng {{Tên ô}}. fields lưu danh sách ô đọc được lúc tải lên.
+CREATE TABLE IF NOT EXISTS ticket_templates (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    name           TEXT NOT NULL,
+    category       TEXT NOT NULL DEFAULT 'khac',
+    filename       TEXT NOT NULL DEFAULT '',
+    stored_name    TEXT NOT NULL,
+    fields         TEXT NOT NULL DEFAULT '[]',
+    -- Định dạng số phiếu, "###" là số thứ tự, "YYYY" là năm. Các mẫu cùng
+    -- định dạng dùng chung một dãy số, như cùng một quyển sổ phiếu.
+    number_format  TEXT NOT NULL DEFAULT '###/YYYY/KH/HHC',
+    created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Phiếu đã lập. Số phiếu cấp một lần lúc lưu và không bao giờ đổi; phiếu lập
+-- sai thì huỷ chứ không xoá, để dãy số không bị hổng.
+CREATE TABLE IF NOT EXISTS tickets (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    template_id   INTEGER NOT NULL REFERENCES ticket_templates(id),
+    book          TEXT NOT NULL,
+    year          INTEGER NOT NULL,
+    number        INTEGER NOT NULL,
+    code          TEXT NOT NULL,
+    ticket_date   TEXT NOT NULL DEFAULT '',
+    field_values  TEXT NOT NULL DEFAULT '{}',
+    status        TEXT NOT NULL DEFAULT 'da_lap',
+    note          TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (book, year, number)
+);
+CREATE INDEX IF NOT EXISTS idx_tickets_template ON tickets(template_id);
+
+-- Số tiếp theo của từng sổ phiếu trong từng năm. Đặt tay được, để nối tiếp
+-- dãy số đang ghi trên sổ giấy khi bắt đầu dùng phần mềm giữa năm.
+CREATE TABLE IF NOT EXISTS ticket_counters (
+    book          TEXT NOT NULL,
+    year          INTEGER NOT NULL,
+    next_number   INTEGER NOT NULL,
+    PRIMARY KEY (book, year)
+);
+
 CREATE TABLE IF NOT EXISTS ask_usage (
     period_kind   TEXT NOT NULL,
     period_key    TEXT NOT NULL,

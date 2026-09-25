@@ -9,8 +9,8 @@ import {
 } from '../ui.js';
 
 export const meta = {
-  title: 'Phiếu thao tác',
-  subtitle: 'Phân theo trường hợp áp dụng và loại thao tác, in trực tiếp để sử dụng tại hiện trường',
+  title: 'Trình tự thao tác mẫu',
+  subtitle: 'Trình tự thao tác chuẩn theo trường hợp áp dụng, làm căn cứ tra cứu cho trợ lý và in tham khảo tại hiện trường',
 };
 
 const CONTEXTS = {

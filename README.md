@@ -137,6 +137,48 @@ phải đặt biến môi trường `OLLAMA_HOST=0.0.0.0` (mặc định Ollama 
 Ollama không chạy thì truy hồi **tự lùi về BM25** — hệ thống vẫn dùng được, trang Cấu hình báo
 đỏ kèm lý do. Muốn tắt hẳn nhánh ngữ nghĩa: đặt `EMBEDDING_PROVIDER=none`.
 
+### Phiếu thao tác lập từ mẫu Word
+
+Mục **Phiếu thao tác** dùng chính file Word phiếu của nhà máy làm mẫu, phần mềm chỉ lo phần thay
+đổi mỗi lần lập.
+
+**1. Chuẩn bị mẫu.** Mở phiếu bằng Word, xoá giá trị cụ thể ở chỗ thay đổi mỗi lần lập và gõ
+tên ô trong cặp ngoặc nhọn kép:
+
+```
+Số phiếu: {{Số phiếu}}
+Người viết phiếu: {{Người viết phiếu}}      Chức vụ: {{Chức vụ người viết}}
+Bắt đầu: {{Giờ bắt đầu}}   Ngày {{Ngày}} tháng {{Tháng}} năm {{Năm}}
+```
+
+Lưu file .docx rồi tải lên ở tab **Mẫu phiếu**. Bảng trình tự, logo, header, định dạng giữ
+nguyên. Ô có thể nằm ở bất kỳ đâu, kể cả header/footer. Cùng một tên ô xuất hiện nhiều chỗ thì
+được điền ở tất cả các chỗ. Tab **Mẫu phiếu** có nút tải **mẫu ví dụ** dựng từ phiếu "Đưa MBA
+T2-TD92 vào làm việc", đã đặt sẵn các ô để xem cách làm.
+
+| Tên ô | Phần mềm xử lý |
+|---|---|
+| `{{Số phiếu}}` | Tự cấp số, không nhập tay |
+| `{{Ngày}}` `{{Tháng}}` `{{Năm}}` (cả ba) | Chọn một lần trên lịch, điền vào cả ba ô |
+| Tên bắt đầu bằng "Ngày…" | Chọn trên lịch, điền dạng 26/09/2026 |
+| Tên bắt đầu bằng "Giờ…" | Chọn giờ, điền dạng 08h30 |
+| Tên có "nội dung", "ghi chú", "mục đích", "điều kiện", "lưu ý"… | Ô nhập nhiều dòng |
+| Còn lại | Ô nhập một dòng, gợi ý lại các giá trị đã từng nhập |
+
+**2. Số phiếu tự tăng.** Mỗi mẫu có định dạng số, mặc định `###/YYYY/KH/HHC` (`###` là số thứ tự,
+`YYYY` là năm) → `054/2026/KH/HHC`. Các mẫu cùng định dạng dùng chung một dãy số như cùng một
+quyển sổ phiếu, sang năm mới tự đánh lại từ 001. Số chỉ được cấp lúc bấm **Lưu**: hai người lưu
+cùng lúc vẫn nhận hai số liên tiếp, không trùng. Bắt đầu dùng phần mềm giữa năm thì vào **Sửa**
+mẫu, đặt **Số tiếp theo** để nối tiếp sổ phiếu giấy.
+
+**3. Quản lý.** Phiếu đã lập xem được ngay trên trình duyệt, tải về Word để in, sửa nội dung (số
+phiếu giữ nguyên), đánh dấu **Đã thực hiện** hoặc **Huỷ**. Phiếu lập sai thì huỷ chứ không xoá, để
+dãy số không bị hổng. Mẫu đã dùng để lập phiếu thì không xoá được, để phiếu cũ còn xuất lại đúng
+như lúc lập.
+
+Mục **Trình tự thao tác mẫu** (trước đây tên là "Phiếu thao tác") vẫn giữ nguyên: đó là các
+trình tự chuẩn làm căn cứ tra cứu cho trợ lý.
+
 ### Đọc tài liệu ngay trên trình duyệt
 
 Trong trang chi tiết mỗi tài liệu, nút **MỞ TÀI LIỆU** hiển thị nguyên văn tài liệu ngay trên
@@ -229,6 +271,8 @@ backend/
   models.py            Schema dữ liệu vào/ra (Pydantic)
   seed.py              Dữ liệu mẫu NMTĐ Hủa Na
   docview.py           Dựng bản xem DOCX/XLSX/CSV để đọc thẳng trên trình duyệt
+  phieu.py             Đọc ô {{...}} trong mẫu phiếu Word và điền giá trị
+  mau/                 Mẫu phiếu thao tác ví dụ
   chandoan.py          Soi thứ hạng truy hồi của một câu hỏi (công cụ dòng lệnh)
   main.py              Khởi tạo FastAPI, phục vụ giao diện tĩnh
   rag/

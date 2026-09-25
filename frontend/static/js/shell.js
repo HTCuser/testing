@@ -12,7 +12,8 @@ export const NAV = [
   { path: '/van-hanh', label: 'Quy trình vận hành', icon: 'operations' },
   { path: '/su-co', label: 'Xử lý sự cố', icon: 'incident' },
   { path: '/bao-duong', label: 'Bảo dưỡng, sửa chữa', icon: 'maintenance' },
-  { path: '/bieu-mau', label: 'Phiếu thao tác', icon: 'forms' },
+  { path: '/phieu-thao-tac', label: 'Phiếu thao tác', icon: 'forms' },
+  { path: '/bieu-mau', label: 'Trình tự thao tác mẫu', icon: 'layers' },
   { section: 'Hệ thống' },
   { path: '/cau-hinh', label: 'Cấu hình', icon: 'settings' },
 ];
