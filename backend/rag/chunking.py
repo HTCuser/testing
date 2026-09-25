@@ -16,6 +16,10 @@ MIN_FILL = int(CHUNK_SIZE * 0.4)
 # đoạn toàn bản ghi được giữ ngắn hơn đoạn văn xuôi.
 RECORD_CHUNK_SIZE = max(320, int(CHUNK_SIZE * 0.45))
 
+# Chồng lấn tối đa khi phải lùi về đầu một câu dài.
+MAX_SENTENCE_OVERLAP = max(CHUNK_OVERLAP * 4, 600)
+_SENTENCE_START = re.compile(r"(?<=[.;!?])\s+|\n")
+
 _RECORD_RE = re.compile(r"^(?:\[[^\]]{1,80}\]\s*)?[^:\n]{1,60}:\s*\S")
 
 # Tiêu đề mục trong quy trình kỹ thuật Việt Nam: "## Tiêu đề", "Điều 12.",
@@ -231,10 +235,19 @@ def _tail(text: str) -> str:
         last = text.rsplit("\n", 1)[-1].strip()
         return last if len(last) <= CHUNK_SIZE // 2 else ""
 
-    # Văn xuôi: lùi về đầu câu hoặc đầu dòng nếu có, nếu không thì về ranh giới từ.
+    # Văn xuôi: lùi về đầu câu hoặc đầu dòng nếu có. Không coi dấu hai chấm là
+    # hết câu: "Trường hợp X: làm Y" — phần trước dấu hai chấm là điều kiện.
     tail = text[-CHUNK_OVERLAP:]
-    boundary = re.search(r"(?<=[.;:!?])\s+|\n", tail)
+    boundary = _SENTENCE_START.search(tail)
     if boundary:
         return tail[boundary.end():]
+    # Phần đuôi nằm trọn trong một câu dài: lấy cả câu đó, không bắt đầu giữa
+    # câu. Quy trình hay viết điều kiện ở đầu câu ("Trường hợp có hai bảo vệ
+    # nội bộ tác động: ...") — cắt mất đầu câu là mất điều kiện, phần còn lại
+    # đọc như thuộc về trường hợp đứng ngay sau nó.
+    window = text[-MAX_SENTENCE_OVERLAP:-CHUNK_OVERLAP]
+    starts = list(_SENTENCE_START.finditer(window))
+    if starts:
+        return window[starts[-1].end():] + tail
     cut = tail.find(" ")
     return tail[cut + 1:] if cut != -1 else tail

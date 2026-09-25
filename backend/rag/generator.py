@@ -21,7 +21,8 @@ cần bổ sung tài liệu gì. Không được đoán.
 4. Với câu hỏi về trình tự thao tác hoặc xử lý sự cố, trả lời theo các bước được đánh số, đúng \
 thứ tự trong quy trình.
 5. Nhắc lại các cảnh báo an toàn có trong tài liệu khi chúng liên quan tới câu hỏi.
-6. Trả lời bằng tiếng Việt, văn phong kỹ thuật, ngắn gọn, đi thẳng vào việc.
+6. Trả lời bằng tiếng Việt, văn phong kỹ thuật, đi thẳng vào việc. Viết gọn từng ý nhưng không \
+được lược bớt bước xử lý hay trường hợp nào có trong tài liệu.
 7. Phân biệt chính xác từng chức năng bảo vệ theo mã (87T, 87TN, 87GT, 87G… là các chức năng \
 khác nhau dù tên gần giống). Không bao giờ lấy hiện tượng, nguyên nhân hay cách xử lý của chức \
 năng này để trả lời cho chức năng khác. Nếu câu hỏi gọi tên chung chung mà tài liệu có nhiều chức \
@@ -29,7 +30,14 @@ năng khớp, trả lời cho chức năng khớp sát nhất với cách gọi 
 câu trả lời, rồi liệt kê ngắn các chức năng gần giống để người hỏi chọn lại nếu cần.
 8. Nhãn trong ngoặc vuông ở đầu mỗi dòng, ví dụ [Bảo vệ so lệch (87T) tác động], cho biết dòng \
 đó thuộc sự cố/thiết bị nào. "(tiếp)" nghĩa là phần nối tiếp của cùng bản ghi đó.
-9. Đây là công cụ tra cứu hỗ trợ. Khi câu trả lời liên quan tới thao tác trên thiết bị đang mang \
+9. Với câu hỏi xử lý một sự cố/bảo vệ cụ thể: trình bày TRƯỚC trình tự xử lý riêng của đúng sự \
+cố đó (phần "Xử lý" trong bản ghi của nó, đủ mọi bước, giữ nguyên các cấp nếu có như cấp 1 báo tín \
+hiệu / cấp 2 cắt máy), SAU ĐÓ mới đến các nguyên tắc chung áp dụng cho nhóm thiết bị.
+10. Khi tài liệu phân chia cách xử lý theo trường hợp (ví dụ: chỉ một bảo vệ nội bộ tác động / hai \
+bảo vệ nội bộ cùng tác động / bảo vệ ngoài nội bộ tác động), phải trình bày ĐỦ TẤT CẢ các trường hợp, \
+mỗi trường hợp một mục mở đầu bằng điều kiện nhận biết. Không tự chọn một trường hợp: người vận hành \
+tại hiện trường mới là người xác định trường hợp nào đang xảy ra.
+11. Đây là công cụ tra cứu hỗ trợ. Khi câu trả lời liên quan tới thao tác trên thiết bị đang mang \
 điện hoặc đang vận hành, kết thúc bằng một dòng nhắc thực hiện theo phiếu thao tác đã được duyệt \
 và mệnh lệnh của Trưởng ca."""
 
@@ -97,9 +105,12 @@ def _with_claude(question: str, hits: list[Hit]) -> str:
     import anthropic
 
     client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+    # Trần số token trả lời chỉ là giới hạn trên, không làm tăng chi phí của câu
+    # trả lời ngắn. Đặt thấp thì câu trả lời đủ các trường hợp xử lý sự cố bị cắt
+    # cụt — mà phần bị cắt lại thường là các bước cuối.
     message = client.messages.create(
         model=config.ANTHROPIC_MODEL,
-        max_tokens=2000,
+        max_tokens=4096,
         system=SYSTEM_PROMPT,
         messages=[
             {
@@ -111,7 +122,12 @@ def _with_claude(question: str, hits: list[Hit]) -> str:
             }
         ],
     )
-    return "".join(block.text for block in message.content if block.type == "text").strip()
+    text = "".join(block.text for block in message.content if block.type == "text").strip()
+    if message.stop_reason == "max_tokens":
+        # Không bao giờ để câu trả lời xử lý sự cố bị cụt mà người đọc không biết.
+        text += ("\n\n> **Câu trả lời bị cắt do quá dài.** Các bước phía sau chưa được liệt kê — "
+                 "mở tài liệu nguồn bên dưới để đọc đủ trình tự xử lý.")
+    return text
 
 
 def _extractive(hits: list[Hit]) -> str:
