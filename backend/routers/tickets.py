@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
@@ -317,6 +317,78 @@ def set_next_number(payload: CounterUpdate) -> dict:
     )
     conn.commit()
     return get_template(payload.template_id)
+
+
+# ---------------------------------------------------------------- dashboard ngày
+
+@router.get("/tong-hop")
+def daily_summary(ngay: str = "") -> dict:
+    """Kiểm soát phiếu thao tác theo ngày cho trưởng ca, trưởng kíp.
+
+    Ngoài phiếu trong ngày, trả về các phiếu các ngày trước vẫn ở trạng thái
+    "Đã lập": đó là phiếu chưa được xác nhận đã thực hiện hay chưa — hoặc đã
+    làm mà quên đóng phiếu, hoặc bị bỏ dở. Cả hai đều cần người kiểm tra.
+    """
+    today = _now().date()
+    try:
+        day = datetime.strptime(ngay, "%Y-%m-%d").date() if ngay else today
+    except ValueError:
+        raise HTTPException(400, "Ngày không hợp lệ, cần dạng YYYY-MM-DD")
+    iso = day.isoformat()
+
+    def items(sql: str, params: tuple) -> list[dict]:
+        out = []
+        for row in query(sql, params):
+            item = dict(row)
+            item["values"] = _load_values(item.pop("field_values"))
+            item["status_label"] = STATUSES.get(item["status"], item["status"])
+            out.append(item)
+        return out
+
+    base = """SELECT t.*, m.name AS template_name, m.category AS template_category
+                FROM tickets t JOIN ticket_templates m ON m.id = t.template_id"""
+    day_items = items(f"{base} WHERE t.ticket_date = ? ORDER BY t.number", (iso,))
+    backlog = items(
+        f"{base} WHERE t.status = 'da_lap' AND t.ticket_date < ? ORDER BY t.ticket_date, t.number",
+        (iso,),
+    )
+
+    counts = {k: 0 for k in STATUSES}
+    for item in day_items:
+        counts[item["status"]] = counts.get(item["status"], 0) + 1
+
+    # Phiếu theo người thao tác: ô nào tên là "Người thao tác" trong mẫu.
+    by_operator: dict[str, int] = {}
+    for item in day_items:
+        if item["status"] == "huy":
+            continue
+        for key, value in item["values"].items():
+            if normalize(key).strip() == "nguoi thao tac" and str(value).strip():
+                name = str(value).strip()
+                by_operator[name] = by_operator.get(name, 0) + 1
+
+    week = []
+    for offset in range(6, -1, -1):
+        d = (day - timedelta(days=offset)).isoformat()
+        row = query_one(
+            """SELECT COUNT(*) AS lap,
+                      SUM(status = 'da_thuc_hien') AS thuc_hien,
+                      SUM(status = 'huy') AS huy
+                 FROM tickets WHERE ticket_date = ?""",
+            (d,),
+        )
+        week.append({"date": d, "lap": row["lap"] or 0,
+                     "thuc_hien": row["thuc_hien"] or 0, "huy": row["huy"] or 0})
+
+    return {
+        "date": iso,
+        "is_today": day == today,
+        "counts": {**counts, "tong": len(day_items)},
+        "items": day_items,
+        "backlog": backlog,
+        "by_operator": sorted(by_operator.items(), key=lambda kv: -kv[1]),
+        "week": week,
+    }
 
 
 # ---------------------------------------------------------------- phiếu

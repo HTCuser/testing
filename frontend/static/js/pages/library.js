@@ -7,10 +7,55 @@ import {
   loading, openModal, qs, toast,
 } from '../ui.js';
 
-export const meta = {
-  title: 'Thư viện kỹ thuật',
-  subtitle: 'Tài liệu thiết bị, quy trình, sơ đồ và bài học kinh nghiệm đã nạp vào hệ thống',
+// Thư viện kỹ thuật chia ba trang theo nhóm tài liệu. Cùng một kho, cùng một
+// cách tra cứu; mỗi trang chỉ lọc sẵn các phân loại của nhóm mình.
+const PROCEDURE_VH = ['quy_trinh_van_hanh', 'quy_trinh_su_co'];
+const PROCEDURE_BD = ['quy_trinh_bao_duong'];
+
+export const LIBRARY_GROUPS = {
+  vh: {
+    path: '/quy-trinh-vh',
+    title: 'Quy trình vận hành và xử lý sự cố',
+    subtitle: 'Quy trình VH&XLSC các hệ thống, thiết bị của nhà máy — mở đọc trực tiếp, tìm thông số và cách xử lý',
+    cats: PROCEDURE_VH,
+    upload: 'quy_trinh_van_hanh',
+    placeholder: 'VD: quy trình máy biến áp, hệ thống kích từ…',
+  },
+  bd: {
+    path: '/quy-trinh-bd',
+    title: 'Quy trình bảo dưỡng, sửa chữa',
+    subtitle: 'Quy trình, hướng dẫn bảo dưỡng định kỳ và sửa chữa thiết bị',
+    cats: PROCEDURE_BD,
+    upload: 'quy_trinh_bao_duong',
+    placeholder: 'VD: bảo dưỡng máy cắt, sửa chữa cửa van…',
+  },
+  tl: {
+    path: '/thu-vien',
+    title: 'Tài liệu kỹ thuật',
+    subtitle: 'Tài liệu thiết bị của nhà chế tạo, sơ đồ, bản vẽ, bài học kinh nghiệm',
+    cats: null, // mọi phân loại còn lại
+    upload: 'tai_lieu_ky_thuat',
+    placeholder: 'Tìm theo tên tài liệu, thẻ, thiết bị…',
+  },
 };
+
+function groupCats(group, all) {
+  if (group.cats) return all.filter((c) => group.cats.includes(c.value));
+  const taken = [...PROCEDURE_VH, ...PROCEDURE_BD];
+  return all.filter((c) => !taken.includes(c.value));
+}
+
+export function groupOf(category) {
+  return Object.values(LIBRARY_GROUPS).find((g) => g.cats?.includes(category)) || LIBRARY_GROUPS.tl;
+}
+
+export function createLibraryPage(key) {
+  const group = LIBRARY_GROUPS[key];
+  return {
+    meta: { title: group.title, subtitle: group.subtitle },
+    render: (root, ctx) => render(root, ctx, group),
+  };
+}
 
 // Nhãn nói theo việc vận hành viên quan tâm — tài liệu có tra cứu được hay
 // không — chứ không nói theo cơ chế bên trong.
@@ -21,11 +66,12 @@ const STATUS = {
   loi: ['badge-red', 'Lỗi nạp'],
 };
 
-export async function render(root, ctx) {
+async function render(root, ctx, group) {
   if (ctx.params.id) return renderDetail(root, Number(ctx.params.id));
 
   setPage({
-    ...meta,
+    title: group.title,
+    subtitle: group.subtitle,
     actions: `<button class="btn btn-accent" id="upload-btn">${icon('upload', 16)}TẢI TÀI LIỆU</button>`,
   });
   root.innerHTML = loading();
@@ -38,15 +84,16 @@ export async function render(root, ctx) {
     root.innerHTML = errorState(err.message);
     return;
   }
+  categories = { items: groupCats(group, categories.items) };
 
   root.innerHTML = `
     <div class="toolbar">
       <div class="search">
         ${icon('search', 17)}
-        <input class="input" id="filter-q" placeholder="Tìm theo tên tài liệu, thẻ, thiết bị…"
+        <input class="input" id="filter-q" placeholder="${esc(group.placeholder)}"
                value="${esc(ctx.query.q || '')}">
       </div>
-      <select class="select" id="filter-category">
+      <select class="select" id="filter-category" ${categories.items.length < 2 ? 'hidden' : ''}>
         <option value="">Mọi phân loại</option>
         ${categories.items.map((c) => `<option value="${c.value}">${esc(c.label)}</option>`).join('')}
       </select>
@@ -54,18 +101,12 @@ export async function render(root, ctx) {
         <option value="">Mọi thiết bị</option>
         ${equipment.items.map((e) => `<option value="${e.id}">${esc(e.code)} — ${esc(e.name)}</option>`).join('')}
       </select>
-      <select class="select" id="filter-source">
-        <option value="">Mọi nguồn</option>
-        <option value="tep">Tệp tải lên</option>
-        <option value="quy_trinh">Sinh từ quy trình</option>
-        <option value="su_co">Sinh từ hồ sơ sự cố</option>
-        <option value="bieu_mau">Sinh từ biểu mẫu</option>
-      </select>
+
     </div>
     <div id="doc-list"></div>`;
 
   const list = qs('#doc-list', root);
-  const filters = ['#filter-q', '#filter-category', '#filter-equipment', '#filter-source']
+  const filters = ['#filter-q', '#filter-category', '#filter-equipment']
     .map((sel) => qs(sel, root));
 
   let timer;
@@ -77,7 +118,7 @@ export async function render(root, ctx) {
     });
   });
 
-  qs('#upload-btn').addEventListener('click', () => openUpload(categories, equipment, load));
+  qs('#upload-btn').addEventListener('click', () => openUpload(categories, equipment, load, group.upload));
 
   list.addEventListener('click', async (e) => {
     const del = e.target.closest('[data-delete]');
@@ -103,11 +144,12 @@ export async function render(root, ctx) {
       const data = await api.documents({
         q: filters[0].value.trim(),
         category: filters[1].value,
+        categories: categories.items.map((c) => c.value).join(','),
         equipment_id: filters[2].value,
-        source_kind: filters[3].value,
+        source_kind: 'tep',
       });
       list.innerHTML = data.items.length
-        ? `<div class="list">${data.items.map(docRow).join('')}</div>
+        ? `<div class="list">${data.items.map((it) => docRow(it, group.path)).join('')}</div>
            <div class="text-muted" style="margin-top:14px">${data.total} tài liệu</div>`
         : emptyState({
             iconName: 'library',
@@ -122,11 +164,11 @@ export async function render(root, ctx) {
   load();
 }
 
-function docRow(item) {
+function docRow(item, base) {
   const [cls, label] = STATUS[item.index_status] || STATUS.cho_xu_ly;
   const isFile = item.source_kind === 'tep';
   return `
-    <a class="row-card" href="#/thu-vien/${item.id}">
+    <a class="row-card" href="#${base}/${item.id}">
       <span class="thumb" style="background:${isFile ? 'var(--blue-soft)' : 'var(--teal-soft)'};
             color:${isFile ? 'var(--blue)' : 'var(--teal)'}">
         ${icon(isFile ? 'file' : 'layers', 18)}
@@ -149,7 +191,7 @@ function docRow(item) {
     </a>`;
 }
 
-function openUpload(categories, equipment, onDone) {
+function openUpload(categories, equipment, onDone, preset) {
   openModal({
     title: 'Tải tài liệu vào thư viện kỹ thuật',
     body: `
@@ -167,7 +209,7 @@ function openUpload(categories, equipment, onDone) {
           <div class="field">
             <label>Phân loại</label>
             <select class="select" name="category">
-              ${categories.items.map((c) => `<option value="${c.value}">${esc(c.label)}</option>`).join('')}
+              ${categories.items.map((c) => `<option value="${c.value}" ${c.value === preset ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}
             </select>
           </div>
           <div class="field">
@@ -254,7 +296,7 @@ async function renderDetail(root, id) {
     title: doc.title,
     subtitle: `${doc.category_label}${doc.equipment_name ? ' · ' + doc.equipment_name : ''}`,
     actions: `
-      <button class="btn btn-sm" data-back>${icon('chevronLeft', 15)}Thư viện</button>
+      <button class="btn btn-sm" data-back>${icon('chevronLeft', 15)}${esc(groupOf(doc.category).title)}</button>
       ${isFile && doc.stored_name ? `
         <a class="btn btn-accent btn-sm" href="/api/documents/${id}/xem" target="_blank" rel="noopener">
           ${icon('library', 15)}MỞ TÀI LIỆU</a>
@@ -312,7 +354,7 @@ async function renderDetail(root, id) {
       </section>
     </div>`;
 
-  document.querySelector('[data-back]')?.addEventListener('click', () => navigate('/thu-vien'));
+  document.querySelector('[data-back]')?.addEventListener('click', () => navigate(groupOf(doc.category).path));
   qs('#ask-about', root).addEventListener('click', () => navigate('/tro-ly', { q: doc.title }));
 
   const inputQ = document.querySelector('#doc-q');

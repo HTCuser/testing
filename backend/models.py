@@ -107,3 +107,22 @@ class AskIn(BaseModel):
     category: str | None = None
     equipment_id: int | None = None
     source_kind: str | None = None
+
+
+JournalKind = Literal["thao_tac", "bao_duong"]
+
+
+class JournalIn(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    started_at: str = ""
+    finished_at: str = ""
+    shift: str = ""
+    equipment_id: int | None = None
+    ref: str = ""
+    performers: str = ""
+    leader: str = ""
+    details: str = ""
+    materials: str = ""
+    result: str = ""
+    notes: str = ""
+    tags: str = ""

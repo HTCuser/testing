@@ -254,7 +254,7 @@ SEVERITY_LABELS = {
 }
 SOURCE_LABELS = {
     "quy_trinh": "Quy trình vận hành và xử lý sự cố nhà máy",
-    "kinh_nghiem": "Kinh nghiệm tích luỹ tại Hủa Na",
+    "kinh_nghiem": "Thực tế vận hành tại Hủa Na",
     "nha_may_khac": "Bài học từ nhà máy điện khác",
 }
 FORM_LABELS = {
@@ -265,3 +265,62 @@ FORM_CONTEXT_LABELS = {
     "van_hanh": "Vận hành bình thường",
     "bao_duong": "Bảo dưỡng, sửa chữa",
 }
+
+
+# Nhãn từng trường của nhật ký nghiệp vụ, theo loại. Dùng chung cho bản kết
+# xuất lập chỉ mục (để trợ lý đọc hiểu) và cho API trả về giao diện.
+JOURNAL_LABELS = {
+    "thao_tac": {
+        "_name": "Thao tác vận hành",
+        "ref": "Số phiếu thao tác",
+        "leader": "Người ra lệnh",
+        "performers": "Người thực hiện",
+        "details": "Diễn biến thao tác",
+        "materials": "",
+        "result": "Kết quả, trạng thái thiết bị sau thao tác",
+        "notes": "Bất thường phát sinh, lưu ý, kinh nghiệm",
+    },
+    "bao_duong": {
+        "_name": "Bảo dưỡng, sửa chữa",
+        "ref": "Số phiếu công tác / lệnh công tác",
+        "leader": "Người chỉ huy trực tiếp",
+        "performers": "Đơn vị, người thực hiện",
+        "details": "Nội dung công việc",
+        "materials": "Vật tư, thiết bị thay thế",
+        "result": "Kết quả, tình trạng thiết bị sau sửa chữa",
+        "notes": "Hư hỏng phát hiện, lưu ý, kinh nghiệm",
+    },
+}
+
+
+def _vi_datetime(value: str) -> str:
+    """"2026-09-26T08:30" → "08:30 ngày 26/09/2026"."""
+    if not value:
+        return ""
+    day, _, time = value.partition("T")
+    parts = day.split("-")
+    if len(parts) != 3:
+        return value
+    text = f"ngày {parts[2]}/{parts[1]}/{parts[0]}"
+    return f"{time[:5]} {text}" if time else text
+
+
+def render_journal(entry: dict, equipment_name: str = "") -> str:
+    labels = JOURNAL_LABELS[entry["kind"]]
+    lines = [f"# {labels['_name']}: {entry['title']}"]
+    when = _vi_datetime(entry.get("started_at", ""))
+    if entry.get("finished_at"):
+        when = f"{when} đến {_vi_datetime(entry['finished_at'])}"
+    if when:
+        lines.append(f"Thời gian: {when}")
+    if entry.get("shift"):
+        lines.append(f"Ca, kíp: {entry['shift']}")
+    if equipment_name:
+        lines.append(f"Thiết bị: {equipment_name}")
+    for key in ("ref", "leader", "performers"):
+        if entry.get(key):
+            lines.append(f"{labels[key]}: {entry[key]}")
+    for key in ("details", "materials", "result", "notes"):
+        if entry.get(key) and labels[key]:
+            lines.append(f"\n## {labels[key]}\n{entry[key]}")
+    return "\n".join(lines)

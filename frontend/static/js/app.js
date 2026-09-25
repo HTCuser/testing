@@ -4,7 +4,8 @@ import * as dashboard from './pages/dashboard.js';
 import * as equipment from './pages/equipment.js';
 import * as forms from './pages/forms.js';
 import * as incidents from './pages/incidents.js';
-import * as library from './pages/library.js';
+import { createJournalPage } from './pages/journal.js';
+import { createLibraryPage } from './pages/library.js';
 import { createProceduresPage } from './pages/procedures.js';
 import { setOrg } from './print.js';
 import * as tickets from './pages/tickets.js';
@@ -31,11 +32,49 @@ const maintenance = createProceduresPage({
   tone: 'amber',
 });
 
+const libraryVH = createLibraryPage('vh');
+const libraryBD = createLibraryPage('bd');
+const libraryDocs = createLibraryPage('tl');
+
+const operationLog = createJournalPage({
+  kind: 'thao_tac',
+  basePath: '/thao-tac',
+  title: 'Thao tác vận hành',
+  subtitle: 'Vận hành viên ghi lại các thao tác đã thực hiện, để tra cứu và tham khảo cho lần sau',
+  addLabel: 'GHI THAO TÁC',
+  placeholder: 'Tìm theo nội dung, thiết bị, người thực hiện, số phiếu…',
+});
+
+const maintenanceLog = createJournalPage({
+  kind: 'bao_duong',
+  basePath: '/sua-chua',
+  title: 'Bảo dưỡng, sửa chữa',
+  subtitle: 'Ghi lại các đợt bảo dưỡng, sửa chữa: nội dung công việc, vật tư thay thế, hư hỏng phát hiện',
+  addLabel: 'GHI CÔNG VIỆC',
+  placeholder: 'Tìm theo công việc, thiết bị, vật tư, số phiếu công tác…',
+});
+
+// Trang quy trình nhập tay (/van-hanh, /bao-duong) và trình tự thao tác mẫu
+// (/bieu-mau) không còn trên menu — thư viện nay là các file quy trình của nhà
+// máy, PTT mẫu là file Word. Vẫn giữ đường dẫn để trích dẫn cũ của trợ lý và dữ
+// liệu đã nhập vẫn mở được.
 const PAGES = [
   ['/', dashboard],
   ['/tro-ly', assistant],
-  ['/thu-vien', library],
-  ['/thu-vien/:id', library],
+  ['/quy-trinh-vh', libraryVH],
+  ['/quy-trinh-vh/:id', libraryVH],
+  ['/quy-trinh-bd', libraryBD],
+  ['/quy-trinh-bd/:id', libraryBD],
+  ['/thu-vien', libraryDocs],
+  ['/thu-vien/:id', libraryDocs],
+  ['/thao-tac', operationLog],
+  ['/thao-tac/moi', operationLog],
+  ['/thao-tac/:id', operationLog],
+  ['/thao-tac/:id/sua', operationLog],
+  ['/sua-chua', maintenanceLog],
+  ['/sua-chua/moi', maintenanceLog],
+  ['/sua-chua/:id', maintenanceLog],
+  ['/sua-chua/:id/sua', maintenanceLog],
   ['/thiet-bi', equipment],
   ['/thiet-bi/:id', equipment],
   ['/van-hanh', operations],

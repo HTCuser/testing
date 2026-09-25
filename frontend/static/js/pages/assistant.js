@@ -16,6 +16,8 @@ const SOURCE_LINK = {
   quy_trinh: (id) => `#/van-hanh/${id}`,
   su_co: (id) => `#/su-co/${id}`,
   bieu_mau: (id) => `#/bieu-mau/${id}`,
+  nhat_ky_thao_tac: (id) => `#/thao-tac/${id}`,
+  nhat_ky_bao_duong: (id) => `#/sua-chua/${id}`,
 };
 
 export const meta = {

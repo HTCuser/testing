@@ -41,7 +41,7 @@ function viDate(iso) {
 // ------------------------------------------------------------ trang tổng
 
 async function renderIndex(root, ctx) {
-  const tab = ctx.query.tab === 'mau' ? 'mau' : 'phieu';
+  const tab = ['mau', 'phieu'].includes(ctx.query.tab) ? ctx.query.tab : 'tong-hop';
   setPage({
     ...meta,
     actions: `
@@ -61,14 +61,15 @@ async function renderIndex(root, ctx) {
 
   root.innerHTML = `
     <div class="tabs">
+      <button class="tab ${tab === 'tong-hop' ? 'active' : ''}" data-tab="">Dashboard</button>
       <button class="tab ${tab === 'phieu' ? 'active' : ''}" data-tab="phieu">Phiếu đã lập</button>
       <button class="tab ${tab === 'mau' ? 'active' : ''}" data-tab="mau">
-        Mẫu phiếu <span class="badge badge-grey">${templates.items.length}</span></button>
+        PTT mẫu <span class="badge badge-grey">${templates.items.length}</span></button>
     </div>
     <div id="tab-body"></div>`;
 
   qsa('[data-tab]', root).forEach((el) => el.addEventListener('click', () => {
-    navigate('/phieu-thao-tac', el.dataset.tab === 'mau' ? { tab: 'mau' } : undefined);
+    navigate('/phieu-thao-tac', el.dataset.tab ? { tab: el.dataset.tab } : undefined);
   }));
   qs('#upload-tpl').addEventListener('click', () => openUpload(templates.categories, (item) => {
     toast(`Đã thêm mẫu "${item.name}" với ${item.fields.length} ô cần điền`, 'success');
@@ -78,7 +79,140 @@ async function renderIndex(root, ctx) {
 
   const body = qs('#tab-body', root);
   if (tab === 'mau') renderTemplates(body, templates);
-  else renderTickets(body, templates, ctx.query);
+  else if (tab === 'phieu') renderTickets(body, templates, ctx.query);
+  else renderDashboard(body, ctx.query.ngay || '');
+}
+
+// ------------------------------------------------------------ dashboard ngày
+
+function shiftDay(iso, days) {
+  const d = new Date(`${iso}T00:00`);
+  d.setDate(d.getDate() + days);
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+}
+
+function kpi(label, value, tone, note = '') {
+  const tones = {
+    blue: ['var(--blue-soft)', 'var(--blue)'], green: ['var(--green-soft)', 'var(--green)'],
+    amber: ['var(--amber-soft)', 'var(--amber)'], red: ['var(--red-soft)', 'var(--red)'],
+    grey: ['#eef2f4', 'var(--muted)'],
+  };
+  const [bg, fg] = tones[tone];
+  return `
+    <div class="stat" style="cursor:default">
+      <div class="stat-top"><span class="stat-icon" style="background:${bg};color:${fg}">${icon('forms', 18)}</span>
+        <span class="stat-label">${esc(label)}</span></div>
+      <div class="stat-value">${value}</div>
+      ${note ? `<div class="stat-note">${esc(note)}</div>` : ''}
+    </div>`;
+}
+
+function dashRow(t, { showDate = false } = {}) {
+  const who = Object.entries(t.values).find(([k]) => /^người thao tác$/i.test(k.trim()))?.[1] || '';
+  return `
+    <tr style="${t.status === 'huy' ? 'opacity:.55' : ''}">
+      <td><a href="#/phieu-thao-tac/${t.id}" class="mono" style="font-weight:700">${esc(t.code)}</a></td>
+      <td>${esc(t.template_name)}${showDate ? `<div class="text-muted" style="font-size:12px">${esc(viDate(t.ticket_date))}</div>` : ''}</td>
+      <td>${esc(who)}</td>
+      <td><span class="badge ${STATUS_BADGE[t.status] || 'badge-grey'}">${esc(t.status_label)}</span></td>
+      <td style="text-align:right;white-space:nowrap">
+        ${t.status === 'da_lap' ? `<button class="btn btn-sm btn-primary" data-done="${t.id}" title="Xác nhận phiếu đã thực hiện xong">${icon('check', 14)}Đã thực hiện</button>` : ''}
+        <a class="btn btn-sm" href="${BASE}/${t.id}/xem" target="_blank" rel="noopener" title="Xem phiếu">${icon('library', 14)}</a>
+      </td>
+    </tr>`;
+}
+
+function ticketTable(items, opts) {
+  return `
+    <div style="overflow-x:auto"><table class="table">
+      <thead><tr><th>Số phiếu</th><th>Phiếu</th><th>Người thao tác</th><th>Trạng thái</th><th></th></tr></thead>
+      <tbody>${items.map((t) => dashRow(t, opts)).join('')}</tbody>
+    </table></div>`;
+}
+
+async function renderDashboard(body, day) {
+  body.innerHTML = loading();
+  let d;
+  try {
+    d = await api.get(`${BASE}/tong-hop`, { ngay: day });
+  } catch (err) {
+    body.innerHTML = errorState(err.message);
+    return;
+  }
+  const c = d.counts;
+  const open = c.da_lap || 0;
+  body.innerHTML = `
+    <div class="toolbar" style="align-items:center">
+      <button class="btn btn-sm" data-day="${shiftDay(d.date, -1)}" title="Ngày trước">${icon('chevronLeft', 15)}</button>
+      <input class="input" type="date" id="dash-day" value="${d.date}" style="width:auto">
+      <button class="btn btn-sm" data-day="${shiftDay(d.date, 1)}" title="Ngày sau">${icon('chevronRight', 15)}</button>
+      ${d.is_today ? '<span class="badge badge-green">Hôm nay</span>' : '<button class="btn btn-sm" data-day="">Về hôm nay</button>'}
+      <span class="text-muted" style="margin-left:auto;font-size:13px">Phiếu tính theo ngày thao tác ghi trên phiếu</span>
+    </div>
+
+    <div class="grid stat-grid" style="margin-bottom:16px">
+      ${kpi('Phiếu trong ngày', c.tong, 'blue', c.huy ? `kể cả ${c.huy} phiếu huỷ` : '')}
+      ${kpi('Đã thực hiện', c.da_thuc_hien || 0, 'green')}
+      ${kpi('Chưa xác nhận thực hiện', open, open ? 'amber' : 'grey')}
+      ${kpi('Tồn các ngày trước', d.backlog.length, d.backlog.length ? 'red' : 'grey', 'phiếu "Đã lập" quá ngày thao tác')}
+    </div>
+
+    ${d.backlog.length ? `
+    <section class="card" style="margin-bottom:16px;border-left:4px solid var(--red)">
+      <div class="card-head"><h2 class="card-title">Phiếu tồn chưa xác nhận thực hiện</h2></div>
+      <p class="text-muted" style="margin:0 0 10px;font-size:13px;line-height:1.6">
+        Đã quá ngày thao tác mà phiếu vẫn ở trạng thái "Đã lập": hoặc đã thao tác xong nhưng chưa đóng phiếu,
+        hoặc thao tác bị dừng giữa chừng. Kiểm tra với kíp trực rồi xác nhận thực hiện hoặc huỷ phiếu.</p>
+      ${ticketTable(d.backlog, { showDate: true })}
+    </section>` : ''}
+
+    <section class="card" style="margin-bottom:16px">
+      <div class="card-head">
+        <h2 class="card-title">Phiếu thao tác ngày ${esc(viDate(d.date))}</h2>
+        <div class="card-actions"><button class="btn btn-sm btn-accent" id="dash-new">${icon('plus', 15)}Lập phiếu</button></div>
+      </div>
+      ${d.items.length ? ticketTable(d.items) : `<p class="text-muted" style="margin:0">Không có phiếu nào trong ngày này.</p>`}
+    </section>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
+        <section class="card">
+          <div class="card-head"><h2 class="card-title">Theo người thao tác</h2></div>
+          ${d.by_operator.length
+            ? `<dl class="kv">${d.by_operator.map(([name, n]) => `<dt style="font-weight:500;color:var(--ink)">${esc(name)}</dt><dd>${n} phiếu</dd>`).join('')}</dl>`
+            : '<p class="text-muted" style="margin:0;font-size:13px">Chưa có (lấy theo ô {{Người thao tác}} của mẫu).</p>'}
+        </section>
+        <section class="card">
+          <div class="card-head"><h2 class="card-title">7 ngày gần nhất</h2></div>
+          <table class="table">
+            <thead><tr><th>Ngày</th><th style="text-align:right">Lập</th><th style="text-align:right">Thực hiện</th><th style="text-align:right">Huỷ</th></tr></thead>
+            <tbody>${d.week.map((w) => `
+              <tr style="${w.date === d.date ? 'background:var(--teal-soft)' : ''}">
+                <td><a href="#/phieu-thao-tac?ngay=${w.date}">${esc(viDate(w.date).slice(0, 5))}</a></td>
+                <td style="text-align:right">${w.lap || '·'}</td>
+                <td style="text-align:right">${w.thuc_hien || '·'}</td>
+                <td style="text-align:right">${w.huy || '·'}</td>
+              </tr>`).join('')}</tbody>
+          </table>
+        </section>
+    </div>`;
+
+  const go = (value) => navigate('/phieu-thao-tac', value ? { ngay: value } : undefined);
+  qsa('[data-day]', body).forEach((el) => el.addEventListener('click', () => go(el.dataset.day)));
+  qs('#dash-day', body).addEventListener('change', (e) => go(e.target.value));
+  qs('#dash-new', body).addEventListener('click', () => qs('#new-ticket')?.click());
+  body.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-done]');
+    if (!btn) return;
+    btn.disabled = true;
+    try {
+      const t = await api.put(`${BASE}/${btn.dataset.done}`, { status: 'da_thuc_hien' });
+      toast(`Phiếu ${t.code}: đã xác nhận thực hiện`, 'success');
+      renderDashboard(body, day);
+    } catch (err) {
+      toast(err.message, 'error');
+      btn.disabled = false;
+    }
+  });
 }
 
 function pickTemplate(templates) {
@@ -89,15 +223,14 @@ function pickTemplate(templates) {
   }
   openModal({
     title: 'Chọn mẫu để lập phiếu',
-    body: `<div class="list">${templates.items.map((t) => `
-      <a class="row-card" href="#/phieu-thao-tac/lap/${t.id}" data-close>
-        <span class="thumb" style="background:var(--violet-soft);color:var(--violet)">${icon('forms', 18)}</span>
+    wide: true,
+    body: groupedTemplates(templates.items, (t) => `
+      <a class="row-card" href="#/phieu-thao-tac/lap/${t.id}" data-close style="padding:10px 12px">
         <div class="row-body">
-          <div class="row-title">${esc(t.name)}</div>
-          <div class="row-meta"><span class="badge badge-grey">${esc(t.category_label)}</span>
-            <span>${t.fields.length} ô cần điền</span></div>
+          <div class="row-title" style="font-size:13.5px">${esc(t.name)}</div>
+          <div class="row-meta">${t.fields.length} ô cần điền</div>
         </div>
-      </a>`).join('')}</div>`,
+      </a>`, { compact: true }),
   });
 }
 
@@ -191,10 +324,10 @@ const HOW_TO = `
   <div class="callout callout-info" style="line-height:1.75">
     <b>Cách chuẩn bị mẫu:</b> mở phiếu thao tác bằng Word, xoá giá trị cụ thể ở những chỗ thay đổi
     mỗi lần lập và gõ vào đó <b>tên ô trong cặp ngoặc nhọn kép</b>, ví dụ
-    <code>{{Số phiếu}}</code>, <code>{{Người viết phiếu}}</code>, <code>{{Người thao tác}}</code>,
-    <code>{{Giờ bắt đầu}}</code>, <code>ngày {{Ngày}} tháng {{Tháng}} năm {{Năm}}</code>.
+    <b style="color:var(--teal)">{{Số phiếu}}</b>, <b style="color:var(--teal)">{{Người viết phiếu}}</b>, <b style="color:var(--teal)">{{Người thao tác}}</b>,
+    <b style="color:var(--teal)">{{Giờ bắt đầu}}</b>, <b style="color:var(--teal)">ngày {{Ngày}} tháng {{Tháng}} năm {{Năm}}</b>.
     Lưu file .docx rồi tải lên. Mọi thứ khác (bảng trình tự, logo, định dạng) giữ nguyên.
-    <br>Tên ô <code>{{Số phiếu}}</code> được cấp số tự động; ô bắt đầu bằng "Ngày", "Giờ" có lịch
+    <br>Tên ô <b style="color:var(--teal)">{{Số phiếu}}</b> được cấp số tự động; ô bắt đầu bằng "Ngày", "Giờ" có lịch
     và đồng hồ để chọn. Cùng một tên ô xuất hiện nhiều chỗ thì được điền ở tất cả các chỗ đó.
     <br><a href="${BASE}/mau-vi-du">${icon('download', 14)} Tải mẫu ví dụ</a> — dựng từ phiếu
     "Đưa MBA T2-TD92 vào làm việc", đã đặt sẵn các ô để xem cách làm.
@@ -205,7 +338,7 @@ function renderTemplates(body, templates) {
     ${HOW_TO}
     <div style="margin-top:16px">
       ${templates.items.length
-        ? `<div class="grid card-grid">${templates.items.map(templateCard).join('')}</div>`
+        ? groupedTemplates(templates.items, templateCard)
         : emptyState({ iconName: 'upload', title: 'Chưa có mẫu phiếu',
                        text: 'Bấm "Tải mẫu phiếu" ở góc trên để thêm mẫu đầu tiên.' })}
     </div>`;
@@ -228,6 +361,39 @@ function renderTemplates(body, templates) {
       } catch (err) { toast(err.message, 'error', 8000); }
     }
   });
+}
+
+// Chia PTT mẫu như phân loại của nhà máy: trường hợp áp dụng (vận hành bình
+// thường / bảo dưỡng, sửa chữa), rồi đến loại phiếu (cô lập / tái lập).
+const CONTEXTS = [
+  ['van_hanh', 'Vận hành bình thường'],
+  ['bao_duong', 'Bảo dưỡng, sửa chữa'],
+];
+const TYPES = [['co_lap', 'Phiếu cô lập'], ['tai_lap', 'Phiếu tái lập']];
+
+function groupedTemplates(items, card, { compact = false } = {}) {
+  const out = [];
+  CONTEXTS.forEach(([ctx, ctxLabel]) => {
+    const inCtx = items.filter((t) => t.category.startsWith(`${ctx}_`));
+    out.push(`<div class="section-title" style="margin:${compact ? '10px 0 6px' : '20px 0 10px'};font-size:14px">${esc(ctxLabel)}</div>`);
+    out.push(`<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(${compact ? 220 : 300}px,1fr))">`);
+    TYPES.forEach(([type, typeLabel]) => {
+      const list = inCtx.filter((t) => t.category === `${ctx}_${type}`);
+      out.push(`<div>
+        <div class="text-muted" style="font-size:12.5px;font-weight:600;margin-bottom:8px">${esc(typeLabel)} (${list.length})</div>
+        ${list.length
+          ? `<div class="${compact ? 'list' : 'grid'}" style="gap:10px">${list.map(card).join('')}</div>`
+          : `<div class="text-muted" style="font-size:13px;padding:10px 0">Chưa có mẫu.</div>`}
+      </div>`);
+    });
+    out.push('</div>');
+  });
+  const other = items.filter((t) => !CONTEXTS.some(([ctx]) => t.category.startsWith(`${ctx}_`)));
+  if (other.length) {
+    out.push(`<div class="section-title" style="margin:20px 0 10px;font-size:14px">Khác</div>`);
+    out.push(`<div class="${compact ? 'list' : 'grid card-grid'}" style="gap:10px">${other.map(card).join('')}</div>`);
+  }
+  return out.join('');
 }
 
 function templateCard(t) {

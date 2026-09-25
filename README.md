@@ -10,10 +10,38 @@ nền sáng, thẻ bo góc, nút nhấn màu cam.
 
 ## Hệ thống làm được gì
 
-### Công tác vận hành
+Menu chia hai phần: **Thư viện kỹ thuật** (tài liệu để tra cứu) và **Nghiệp vụ** (việc vận hành
+viên làm và ghi lại hằng ngày).
 
-| Yêu cầu | Đáp ứng trong hệ thống |
+### Thư viện kỹ thuật
+
+| Mục | Nội dung |
 |---|---|
+| **Quy trình VH & XLSC** | Các file quy trình vận hành và xử lý sự cố của nhà máy |
+| **Quy trình BD, SC** | Quy trình, hướng dẫn bảo dưỡng và sửa chữa |
+| **Tài liệu kỹ thuật** | Tài liệu nhà chế tạo, sơ đồ, bản vẽ, bài học kinh nghiệm |
+| **Danh mục thiết bị** | Hồ sơ từng thiết bị, gom tài liệu và nhật ký liên quan |
+
+Ba trang tài liệu dùng chung một kho, chỉ khác nhau ở phân loại tài liệu. Tài liệu nào cũng mở
+đọc được ngay trên trình duyệt, tìm được bên trong, và là căn cứ trả lời của **Trợ lý kỹ thuật**.
+
+### Nghiệp vụ
+
+| Mục | Nội dung |
+|---|---|
+| **Phiếu thao tác** | **Dashboard** kiểm soát phiếu theo ngày (phiếu trong ngày, đã thực hiện, chưa xác nhận, phiếu tồn các ngày trước, theo người thao tác, 7 ngày gần nhất); **Phiếu đã lập**; **PTT mẫu** chia theo *vận hành bình thường / bảo dưỡng, sửa chữa* và *cô lập / tái lập* |
+| **Thao tác vận hành** | Vận hành viên ghi lại thao tác đã làm: thời gian, ca kíp, thiết bị, số phiếu, người ra lệnh, người thực hiện, diễn biến, bất thường phát sinh |
+| **Xử lý bất thường, sự cố** | Hiện tượng, nguyên nhân, trình tự xử lý, bài học của các bất thường/sự cố đã gặp |
+| **Bảo dưỡng, sửa chữa** | Nội dung công việc, số phiếu công tác, vật tư thay thế, hư hỏng phát hiện, kết quả |
+
+Mọi bản ghi nghiệp vụ **tự động được lập chỉ mục** ngay khi lưu: ghi một lần thao tác hôm nay thì
+ca đêm hỏi trợ lý "lần trước đưa MBA T2 vào làm việc có vướng gì" đã tìm ra.
+
+Các trang cũ **Quy trình vận hành / Bảo dưỡng** (quy trình nhập tay) và **Trình tự thao tác mẫu**
+không còn trên menu vì trùng với thư viện quy trình và PTT mẫu dạng Word. Dữ liệu cũ vẫn giữ, trợ
+lý vẫn tra cứu được, và vẫn mở được qua các đường dẫn `#/van-hanh`, `#/bao-duong`, `#/bieu-mau`.
+
+---|---|
 | Tra cứu nhanh tài liệu kỹ thuật thiết bị | **Trợ lý kỹ thuật** hỏi đáp bằng tiếng Việt tự nhiên, trả lời kèm trích dẫn nguồn; **Thư viện kỹ thuật** tra theo tên, thẻ, thiết bị, phân loại |
 | Tra cứu quy trình vận hành thiết bị | **Quy trình vận hành** — từng bước có đánh số, biện pháp an toàn, điều kiện áp dụng, in được ra giấy |
 | Xử lý nhanh sự cố, bất thường | **Xử lý sự cố** có ô "Tra cứu nhanh theo hiện tượng": mô tả hiện tượng đang gặp → ra ngay hồ sơ và quy trình liên quan |
@@ -272,6 +300,7 @@ backend/
   seed.py              Dữ liệu mẫu NMTĐ Hủa Na
   docview.py           Dựng bản xem DOCX/XLSX/CSV để đọc thẳng trên trình duyệt
   phieu.py             Đọc ô {{...}} trong mẫu phiếu Word và điền giá trị
+  routers/journal.py   Nhật ký thao tác vận hành, bảo dưỡng sửa chữa
   mau/                 Mẫu phiếu thao tác ví dụ
   chandoan.py          Soi thứ hạng truy hồi của một câu hỏi (công cụ dòng lệnh)
   main.py              Khởi tạo FastAPI, phục vụ giao diện tĩnh

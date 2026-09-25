@@ -9,8 +9,8 @@ import {
 } from '../ui.js';
 
 export const meta = {
-  title: 'Xử lý sự cố và bất thường',
-  subtitle: 'Tra cứu nhanh theo hiện tượng, kèm bài học kinh nghiệm tích luỹ từ thực tế vận hành',
+  title: 'Xử lý bất thường, sự cố',
+  subtitle: 'Vận hành viên ghi lại hiện tượng, nguyên nhân, cách xử lý các bất thường và sự cố đã gặp, để tra cứu và tham khảo',
 };
 
 const SEVERITY = {
@@ -21,7 +21,7 @@ const SEVERITY = {
 
 const SOURCE = {
   quy_trinh: ['badge-blue', 'Theo quy trình'],
-  kinh_nghiem: ['badge-green', 'Kinh nghiệm Hủa Na'],
+  kinh_nghiem: ['badge-green', 'Thực tế tại Hủa Na'],
   nha_may_khac: ['badge-violet', 'Nhà máy khác'],
 };
 
@@ -221,7 +221,7 @@ function openEditor(existing, equipmentItems, onDone) {
             <label>Nguồn</label>
             <select class="select" name="source">
               ${Object.entries(SOURCE).map(([value, [, label]]) => `<option value="${value}"
-                ${existing?.source === value ? 'selected' : ''}>${esc(label)}</option>`).join('')}
+                ${(existing ? existing.source === value : value === 'kinh_nghiem') ? 'selected' : ''}>${esc(label)}</option>`).join('')}
             </select>
           </div>
         </div>

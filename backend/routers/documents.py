@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/documents", tags=["Thư viện kỹ thuật"])
 
 CATEGORIES = {
     "tai_lieu_ky_thuat": "Tài liệu kỹ thuật thiết bị",
-    "quy_trinh_van_hanh": "Quy trình vận hành",
+    "quy_trinh_van_hanh": "Quy trình vận hành và xử lý sự cố",
     "quy_trinh_bao_duong": "Quy trình bảo dưỡng, sửa chữa",
     "quy_trinh_su_co": "Quy trình xử lý sự cố",
     "so_do_ban_ve": "Sơ đồ, bản vẽ",
@@ -36,7 +36,7 @@ def categories() -> dict:
 
 @router.get("")
 def list_documents(q: str = "", category: str = "", equipment_id: int | None = None,
-                   source_kind: str = "") -> dict:
+                   source_kind: str = "", categories: str = "") -> dict:
     rows = query(
         """
         SELECT d.*, COALESCE(e.name, '') AS equipment_name, COALESCE(e.code, '') AS equipment_code
@@ -48,6 +48,11 @@ def list_documents(q: str = "", category: str = "", equipment_id: int | None = N
     items = rows_to_dicts(rows)
     if category:
         items = [it for it in items if it["category"] == category]
+    if categories:
+        # Mỗi trang thư viện (quy trình VH&XLSC, quy trình BD-SC, tài liệu kỹ
+        # thuật) là một nhóm phân loại.
+        wanted = {c.strip() for c in categories.split(",") if c.strip()}
+        items = [it for it in items if it["category"] in wanted]
     if source_kind:
         items = [it for it in items if it["source_kind"] == source_kind]
     if equipment_id:

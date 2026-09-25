@@ -189,6 +189,30 @@ CREATE TABLE IF NOT EXISTS ticket_counters (
     PRIMARY KEY (book, year)
 );
 
+-- Nhật ký nghiệp vụ do vận hành viên ghi: các lần thao tác vận hành và các
+-- đợt bảo dưỡng, sửa chữa đã thực hiện. Mục đích là tra cứu lại được: lần
+-- trước làm việc này thế nào, gặp vướng gì, ai làm.
+CREATE TABLE IF NOT EXISTS journal (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind          TEXT NOT NULL,              -- thao_tac | bao_duong
+    title         TEXT NOT NULL,
+    started_at    TEXT NOT NULL DEFAULT '',   -- YYYY-MM-DDTHH:MM, giờ nhà máy
+    finished_at   TEXT NOT NULL DEFAULT '',
+    shift         TEXT NOT NULL DEFAULT '',
+    equipment_id  INTEGER REFERENCES equipment(id) ON DELETE SET NULL,
+    ref           TEXT NOT NULL DEFAULT '',   -- số phiếu thao tác / phiếu công tác
+    performers    TEXT NOT NULL DEFAULT '',
+    leader        TEXT NOT NULL DEFAULT '',   -- người ra lệnh / chỉ huy trực tiếp
+    details       TEXT NOT NULL DEFAULT '',
+    materials     TEXT NOT NULL DEFAULT '',
+    result        TEXT NOT NULL DEFAULT '',
+    notes         TEXT NOT NULL DEFAULT '',
+    tags          TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_journal_kind_time ON journal(kind, started_at);
+
 CREATE TABLE IF NOT EXISTS ask_usage (
     period_kind   TEXT NOT NULL,
     period_key    TEXT NOT NULL,

@@ -15,6 +15,21 @@ def _count(table: str, where: str = "", params: tuple = ()) -> int:
     return row["n"] if row else 0
 
 
+def _tickets_today() -> dict:
+    today = usage._now().date().isoformat()
+    row = query_one(
+        """SELECT COUNT(*) AS tong, SUM(status = 'da_thuc_hien') AS xong,
+                  SUM(status = 'da_lap') AS mo
+             FROM tickets WHERE ticket_date = ? AND status <> 'huy'""",
+        (today,),
+    )
+    backlog = query_one(
+        "SELECT COUNT(*) AS n FROM tickets WHERE status = 'da_lap' AND ticket_date < ?", (today,)
+    )
+    return {"tong": row["tong"] or 0, "xong": row["xong"] or 0, "mo": row["mo"] or 0,
+            "ton": backlog["n"] or 0}
+
+
 @router.get("/stats")
 def stats() -> dict:
     index.ensure_ready()
@@ -28,7 +43,18 @@ def stats() -> dict:
             "forms": _count("forms"),
             "chunks": _count("chunks"),
             "queries": _count("chat_logs"),
+            "journal_thao_tac": _count("journal", "WHERE kind = 'thao_tac'"),
+            "journal_bao_duong": _count("journal", "WHERE kind = 'bao_duong'"),
         },
+        # Chỉ tính tệp tải lên: bản ghi nghiệp vụ cũng được lập chỉ mục như tài
+        # liệu nhưng không thuộc thư viện.
+        "library_by_category": {
+            row["category"]: row["n"]
+            for row in query(
+                "SELECT category, COUNT(*) AS n FROM documents WHERE source_kind = 'tep' GROUP BY category"
+            )
+        },
+        "tickets_today": _tickets_today(),
         "by_procedure_kind": {
             row["kind"]: row["n"]
             for row in query("SELECT kind, COUNT(*) AS n FROM procedures GROUP BY kind")
@@ -46,7 +72,7 @@ def stats() -> dict:
         "recent_documents": rows_to_dicts(
             query(
                 """SELECT id, title, category, source_kind, index_status, n_chunks, created_at
-                     FROM documents ORDER BY id DESC LIMIT 6"""
+                     FROM documents WHERE source_kind = 'tep' ORDER BY id DESC LIMIT 6"""
             )
         ),
         "recent_incidents": rows_to_dicts(
@@ -55,6 +81,14 @@ def stats() -> dict:
                           COALESCE(e.name, '') AS equipment_name
                      FROM incidents i LEFT JOIN equipment e ON e.id = i.equipment_id
                     ORDER BY i.updated_at DESC LIMIT 6"""
+            )
+        ),
+        "recent_journal": rows_to_dicts(
+            query(
+                """SELECT j.id, j.kind, j.title, j.started_at, j.performers,
+                          COALESCE(e.name, '') AS equipment_name
+                     FROM journal j LEFT JOIN equipment e ON e.id = j.equipment_id
+                    ORDER BY j.started_at DESC, j.id DESC LIMIT 6"""
             )
         ),
         "recent_queries": rows_to_dicts(
