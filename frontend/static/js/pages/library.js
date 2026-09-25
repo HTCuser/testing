@@ -333,7 +333,7 @@ async function renderDetail(root, id) {
         <div class="card-head"><h2 class="card-title">Thông tin tài liệu</h2></div>
         <dl class="kv" style="grid-template-columns:130px 1fr">
           <dt>Trạng thái</dt><dd><span class="badge ${cls}">${esc(label)}</span></dd>
-          <dt>Phân loại</dt><dd>${esc(doc.category_label)}</dd>
+          <dt>Phân loại</dt><dd>${isFile ? `<select class="select" id="doc-category" style="padding:4px 8px;font-size:13px"></select>` : esc(doc.category_label)}</dd>
           <dt>Nguồn</dt><dd>${isFile ? 'Tệp tải lên' : 'Sinh từ bản ghi nghiệp vụ'}</dd>
           ${doc.equipment_name ? `<dt>Thiết bị</dt><dd>${esc(doc.equipment_name)}</dd>` : ''}
           ${doc.filename ? `<dt>Tên tệp</dt><dd class="mono">${esc(doc.filename)}</dd>` : ''}
@@ -355,6 +355,23 @@ async function renderDetail(root, id) {
     </div>`;
 
   document.querySelector('[data-back]')?.addEventListener('click', () => navigate(groupOf(doc.category).path));
+
+  // Đổi phân loại là chuyển tài liệu sang trang thư viện khác (VH&XLSC, BD-SC,
+  // tài liệu kỹ thuật) — cần khi lỡ tải lên nhầm nhóm.
+  const catSelect = qs('#doc-category', root);
+  if (catSelect) {
+    api.categories().then((cats) => {
+      catSelect.innerHTML = cats.items.map((c) => `<option value="${c.value}" ${c.value === doc.category ? 'selected' : ''}>${esc(c.label)}</option>`).join('');
+    });
+    catSelect.addEventListener('change', async () => {
+      try {
+        const saved = await api.put(`/api/documents/${id}`, { category: catSelect.value });
+        const target = groupOf(saved.category);
+        toast(`Đã chuyển sang "${target.title}"`, 'success');
+        navigate(`${target.path}/${id}`);
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  }
   qs('#ask-about', root).addEventListener('click', () => navigate('/tro-ly', { q: doc.title }));
 
   const inputQ = document.querySelector('#doc-q');

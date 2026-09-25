@@ -243,6 +243,8 @@ def update_document(document_id: int, payload: DocumentUpdate) -> dict:
     if query_one("SELECT id FROM documents WHERE id = ?", (document_id,)) is None:
         raise HTTPException(404, "Không tìm thấy tài liệu")
     fields = payload.model_dump(exclude_none=True)
+    if "category" in fields and fields["category"] not in CATEGORIES:
+        raise HTTPException(400, "Phân loại không hợp lệ")
     if fields:
         assignments = ", ".join(f"{k} = ?" for k in fields)
         execute(f"UPDATE documents SET {assignments} WHERE id = ?",
