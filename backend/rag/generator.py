@@ -7,7 +7,7 @@ nguồn, vẫn dùng được cho tra cứu nhanh mà không phụ thuộc dịc
 from __future__ import annotations
 
 from .. import config
-from .index import Hit
+from .index import Hit, complete_record
 
 SYSTEM_PROMPT = """Bạn là trợ lý kỹ thuật của Nhà máy Thủy điện Hủa Na, phục vụ vận hành viên, \
 kỹ thuật viên xử lý sự cố và thợ sửa chữa.
@@ -22,13 +22,21 @@ cần bổ sung tài liệu gì. Không được đoán.
 thứ tự trong quy trình.
 5. Nhắc lại các cảnh báo an toàn có trong tài liệu khi chúng liên quan tới câu hỏi.
 6. Trả lời bằng tiếng Việt, văn phong kỹ thuật, ngắn gọn, đi thẳng vào việc.
-7. Đây là công cụ tra cứu hỗ trợ. Khi câu trả lời liên quan tới thao tác trên thiết bị đang mang \
+7. Phân biệt chính xác từng chức năng bảo vệ theo mã (87T, 87TN, 87GT, 87G… là các chức năng \
+khác nhau dù tên gần giống). Không bao giờ lấy hiện tượng, nguyên nhân hay cách xử lý của chức \
+năng này để trả lời cho chức năng khác. Nếu câu hỏi gọi tên chung chung mà tài liệu có nhiều chức \
+năng khớp, trả lời cho chức năng khớp sát nhất với cách gọi của người hỏi, nêu rõ mã của nó ở đầu \
+câu trả lời, rồi liệt kê ngắn các chức năng gần giống để người hỏi chọn lại nếu cần.
+8. Nhãn trong ngoặc vuông ở đầu mỗi dòng, ví dụ [Bảo vệ so lệch (87T) tác động], cho biết dòng \
+đó thuộc sự cố/thiết bị nào. "(tiếp)" nghĩa là phần nối tiếp của cùng bản ghi đó.
+9. Đây là công cụ tra cứu hỗ trợ. Khi câu trả lời liên quan tới thao tác trên thiết bị đang mang \
 điện hoặc đang vận hành, kết thúc bằng một dòng nhắc thực hiện theo phiếu thao tác đã được duyệt \
 và mệnh lệnh của Trưởng ca."""
 
 
 def build_context(hits: list[Hit]) -> str:
     blocks = []
+    sent: dict[str, int] = {}  # dòng đã gửi → số hiệu đoạn chứa nó
     for i, hit in enumerate(hits, start=1):
         location = []
         if hit.heading:
@@ -36,9 +44,18 @@ def build_context(hits: list[Hit]) -> str:
         if hit.page:
             location.append(f"trang {hit.page}")
         meta = f" ({', '.join(location)})" if location else ""
-        blocks.append(
-            f"<doan id=\"{i}\" nguon=\"{hit.doc_title}{meta}\">\n{hit.text}\n</doan>"
-        )
+        # Hai nửa của một bản ghi thường cùng lọt top: sau khi ghép, đoạn sau
+        # trùng hẳn đoạn trước. Giữ số hiệu (để trích dẫn khớp danh sách nguồn
+        # trên giao diện) nhưng không gửi lặp nội dung.
+        lines = complete_record(hit).split("\n")
+        fresh = [ln for ln in lines if ln not in sent]
+        if not fresh:
+            body = f"(cùng nội dung với đoạn [{sent[lines[0]]}])"
+        else:
+            body = "\n".join(fresh)
+            for ln in fresh:
+                sent.setdefault(ln, i)
+        blocks.append(f"<doan id=\"{i}\" nguon=\"{hit.doc_title}{meta}\">\n{body}\n</doan>")
     return "\n\n".join(blocks)
 
 

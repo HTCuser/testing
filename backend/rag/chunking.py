@@ -105,13 +105,39 @@ def chunk_text(text: str, page: int | None = None, start_ord: int = 0) -> list[C
             if not starts_new_section and len(current) + len(unit) + 1 <= cap:
                 current = f"{current}\n{unit}"
                 continue
-            emit(current, current_heading)
-            overlap = _tail(current) if CHUNK_OVERLAP and not starts_new_section else ""
+            body, dangling = _detach_group_headings(current)
+            if not body:
+                # Mới chỉ có tiêu đề nhóm: giữ lại để đi cùng nội dung của nó.
+                current = f"{current}\n{unit}"
+                continue
+            emit(body, current_heading)
+            if dangling:
+                overlap = dangling
+            elif _CONTINUATION_RE.match(unit):
+                # Mảnh sau đã tự mang nhãn bản ghi, lặp thêm câu cuối của mảnh
+                # trước chỉ chèn một câu không nhãn vào đầu đoạn.
+                overlap = ""
+            else:
+                overlap = _tail(body) if CHUNK_OVERLAP and not starts_new_section else ""
             current = f"{overlap}\n{unit}".strip() if overlap else unit
             current_heading = heading
     if current.strip():
         emit(current, current_heading)
     return chunks
+
+
+def _detach_group_headings(text: str) -> tuple[str, str]:
+    """Tách các dòng tiêu đề nhóm ("— Bảo vệ ... tác động") treo ở cuối đoạn.
+
+    Tiêu đề nhóm thuộc về nội dung đứng sau nó. Để nó ở cuối đoạn trước thì
+    đoạn đó mang tên một sự cố mà nội dung lại là cách xử lý của sự cố khác —
+    cả truy hồi lẫn mô hình sinh câu trả lời đều bị dẫn sai.
+    """
+    lines = text.rstrip().split("\n")
+    dangling: list[str] = []
+    while lines and lines[-1].strip().startswith("— "):
+        dangling.insert(0, lines.pop().strip())
+    return "\n".join(lines).strip(), "\n".join(dangling)
 
 
 def _split_oversized(body: str) -> list[str]:
@@ -134,23 +160,56 @@ def _split_oversized(body: str) -> list[str]:
                 if len(line) <= CHUNK_SIZE:
                     units.append(line)
                 else:
-                    units.extend(_split_sentences(line))
+                    units.extend(_split_record_line(line))
             continue
-        units.extend(_split_sentences(para))
+        units.extend(_split_record_line(para))
     return units
 
 
-def _split_sentences(para: str) -> list[str]:
+_LABEL_RE = re.compile(r"^\[([^\]]{1,120})\]\s*")
+_CONTINUATION_RE = re.compile(r"^\[[^\]]{1,120}\][^\n]{0,40}\(tiếp\)")
+# Tên trường trong bản ghi đã kết xuất: đầu bản ghi hoặc ngay sau "; ".
+_FIELD_RE = re.compile(r"(?:^|;\s)([^:;\[\]]{1,30}):\s")
+
+
+def _split_record_line(line: str) -> list[str]:
+    """Tách một bản ghi quá dài, lặp lại nhãn ở đầu từng mảnh.
+
+    Bản ghi xử lý sự cố thường dài hơn một đoạn chỉ mục: phần "Xử lý" bị tách
+    sang đoạn sau. Mảnh sau không mang nhãn thì không ai biết nó thuộc sự cố
+    nào — tệ hơn, mảnh đó lại nằm sát tiêu đề sự cố kế tiếp nên bị đọc nhầm
+    thành cách xử lý của sự cố khác (87T bị hiểu thành 87TN).
+    """
+    match = _LABEL_RE.match(line)
+    if not match:
+        return _split_sentences(line)
+    label = match.group(1)
+    body = line[match.end():]
+    # Chừa chỗ cho nhãn lặp lại để mảnh sau không vượt kích thước đoạn.
+    room = max(CHUNK_SIZE // 2, CHUNK_SIZE - len(label) - 40)
+    pieces = _split_sentences(body, limit=room)
+    out = [f"[{label}] {pieces[0]}"]
+    consumed = pieces[0]
+    for piece in pieces[1:]:
+        fields = _FIELD_RE.findall(consumed)
+        field = fields[-1].strip() if fields else ""
+        prefix = f"[{label}] {field} (tiếp): " if field else f"[{label}] (tiếp) "
+        out.append(prefix + piece)
+        consumed = f"{consumed} {piece}"
+    return out
+
+
+def _split_sentences(para: str, limit: int = CHUNK_SIZE) -> list[str]:
     sentences = re.split(r"(?<=[.;:!?])\s+", para)
     out: list[str] = []
     current = ""
     for sentence in sentences:
-        while len(sentence) > CHUNK_SIZE:
-            out.append(sentence[:CHUNK_SIZE])
-            sentence = sentence[CHUNK_SIZE:]
+        while len(sentence) > limit:
+            out.append(sentence[:limit])
+            sentence = sentence[limit:]
         if not current:
             current = sentence
-        elif len(current) + len(sentence) + 1 <= CHUNK_SIZE:
+        elif len(current) + len(sentence) + 1 <= limit:
             current = f"{current} {sentence}"
         else:
             out.append(current)

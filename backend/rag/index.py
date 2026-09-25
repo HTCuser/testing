@@ -7,13 +7,14 @@ này đủ nhanh và không cần thêm hạ tầng vector database.
 from __future__ import annotations
 
 import math
+import re
 import threading
 from collections import Counter
 from dataclasses import dataclass, field
 
 from .. import config
-from ..db import query
-from . import embeddings
+from ..db import query, query_one
+from . import embeddings, glossary
 from .textutils import snippet, tokenize
 
 K1 = 1.5
@@ -62,6 +63,7 @@ class HybridIndex:
         self._df: Counter = Counter()
         self._avg_len: float = 0.0
         self._meta: dict[int, dict] = {}
+        self._glossary: dict[str, set[str]] = {}
         self._ready = False
 
     # ---------------------------------------------------------------- dựng chỉ mục
@@ -82,14 +84,24 @@ class HybridIndex:
         df: Counter = Counter()
         meta: dict[int, dict] = {}
         total_len = 0
+        table = glossary.build(row["text"] for row in rows)
 
         for row in rows:
             # Tiêu đề tài liệu và tiêu đề mục được đưa vào chuỗi lập chỉ mục để
             # câu hỏi nêu tên thiết bị vẫn khớp được đoạn không nhắc lại tên đó.
+            # Thêm mọi tên gọi của các mã bảo vệ đoạn này nhắc tới, để hỏi theo
+            # tên nào cũng tìm được.
+            aliases = glossary.expand_document(row["text"], table)
             indexable = f"{row['title']}\n{row['equipment_name']}\n{row['heading']}\n{row['text']}"
             tokens = tokenize(indexable)
             entry = _Entry(chunk_id=row["id"], document_id=row["document_id"])
-            entry.tf = Counter(tokens)
+            # Chỉ lấy từ ghép (bigram) của tên gọi: đó mới là phần phân biệt chức
+            # năng ("lệch MBA", "dọc MBA"). Từ đơn như "máy", "cắt" có ở khắp nơi,
+            # thêm vào chỉ làm nhiễu các câu hỏi không liên quan tới mã đó.
+            entry.tf = Counter(tokens + [t for t in tokenize(aliases) if "_" in t])
+            # Độ dài chỉ tính phần nội dung thật. Tính cả tên gọi bổ sung thì
+            # đoạn nhắc nhiều mã (ma trận cắt có hàng chục mã) bị phồng độ dài,
+            # BM25 phạt oan đúng những đoạn trả lời câu "bảo vệ nào cắt máy cắt nào".
             entry.length = len(tokens)
             total_len += entry.length
             entries.append(entry)
@@ -102,6 +114,7 @@ class HybridIndex:
             self._df = df
             self._meta = meta
             self._avg_len = (total_len / len(entries)) if entries else 0.0
+            self._glossary = table
             self._ready = True
 
     def ensure_ready(self) -> None:
@@ -111,6 +124,14 @@ class HybridIndex:
     @property
     def size(self) -> int:
         return len(self._entries)
+
+    def query_terms(self, question: str) -> list[str]:
+        """Từ khoá tìm kiếm của câu hỏi, bổ sung mã bảo vệ theo tên gọi."""
+        terms = tokenize(question)
+        codes = glossary.expand_query(question, self._glossary)
+        # Lặp mã hai lần: người hỏi đã gọi đúng một chức năng cụ thể, mã của nó
+        # phải nặng ký hơn các từ chung như "so lệch", "tác động".
+        return terms + codes * 2
 
     # ------------------------------------------------------------------ tìm kiếm
 
@@ -126,7 +147,7 @@ class HybridIndex:
     ) -> list[Hit]:
         self.ensure_ready()
         top_k = top_k or config.TOP_K
-        terms = tokenize(question)
+        terms = self.query_terms(question)
         if not terms:
             return []
 
@@ -198,6 +219,54 @@ class HybridIndex:
                 scored.append((row["chunk_id"], score))
         scored.sort(key=lambda x: x[1], reverse=True)
         return scored[:limit]
+
+
+_LABEL_LINE_RE = re.compile(r"^\[([^\]]{1,120})\]")
+
+
+def _is_continuation(line: str) -> bool:
+    return bool(re.match(r"^\[[^\]]{1,120}\][^\n]{0,40}\(tiếp\)", line.strip()))
+
+
+def complete_record(hit: Hit, span: int = 2) -> str:
+    """Nội dung đoạn kèm phần còn lại của các bản ghi bị tách sang đoạn bên cạnh.
+
+    Bản ghi xử lý sự cố dài thường bị cắt làm hai đoạn chỉ mục. Truy hồi trúng
+    nửa đầu mà mô hình chỉ đọc nửa đầu thì câu trả lời thiếu các bước cuối —
+    mà các bước cuối (báo cáo điều độ, cô lập thiết bị) lại là phần bắt buộc.
+    """
+    labels: set[str] = set()
+    split_labels: set[str] = set()  # nhãn có mảnh "(tiếp)" ngay trong đoạn này
+    for line in hit.text.split("\n"):
+        if m := _LABEL_LINE_RE.match(line.strip()):
+            labels.add(m.group(1))
+            if _is_continuation(line):
+                split_labels.add(m.group(1))
+    if not labels:
+        return hit.text
+    row = query_one("SELECT ord FROM chunks WHERE id = ?", (hit.chunk_id,))
+    if row is None:
+        return hit.text
+    neighbours = query(
+        "SELECT ord, text FROM chunks WHERE document_id = ? AND ord BETWEEN ? AND ? "
+        " AND id <> ? ORDER BY ord",
+        (hit.document_id, row["ord"] - span, row["ord"] + span, hit.chunk_id),
+    )
+    have = set(hit.text.split("\n"))
+    before, after = [], []
+    for other in neighbours:
+        for line in other["text"].split("\n"):
+            m = _LABEL_LINE_RE.match(line.strip())
+            if not m or line in have:
+                continue
+            # Chỉ ghép mảnh của cùng một bản ghi bị tách. Các dòng khác cùng
+            # nhãn (hàng loạt thông số chung một bảng) là bản ghi riêng, kéo
+            # vào chỉ làm phình ngữ cảnh.
+            label = m.group(1)
+            if (label in labels and _is_continuation(line)) or label in split_labels:
+                (before if other["ord"] < row["ord"] else after).append(line)
+                have.add(line)
+    return "\n".join(before + [hit.text] + after)
 
 
 def _bm25(entries, terms, df, avg_len, keep) -> list[tuple[int, float]]:

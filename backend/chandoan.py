@@ -31,7 +31,10 @@ def run(question: str, needle: str = "", top_k: int = 8) -> None:
     print(f"Embedding: {'đang chạy' if probe['ok'] else 'TẮT — ' + probe['reason']}")
     print(f"Tổng đoạn chỉ mục: {index.size}\n")
 
-    terms = tokenize(question)
+    terms = index.query_terms(question)
+    extra = terms[len(tokenize(question)):]
+    if extra:
+        print(f"Mã bảo vệ bổ sung theo tên gọi: {', '.join(sorted(set(extra))).upper()}\n")
     with index._lock:
         entries = list(index._entries)
         meta = dict(index._meta)
