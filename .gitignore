@@ -11,6 +11,8 @@ data/huana.db-wal
 data/huana.db-shm
 data/uploads/
 data/index/
+data/mau_phieu/
+data/phieu/
 
 .DS_Store
 *.log
