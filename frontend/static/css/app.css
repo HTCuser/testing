@@ -539,3 +539,7 @@ a:hover { text-decoration: underline; }
   .ptt-grid, .ptt-person { grid-template-columns: 1fr; }
 }
 fieldset[disabled] .input, fieldset[disabled] .textarea { background: #f6f8f9; color: var(--ink); }
+
+/* Thuộc tính hidden phải thắng mọi quy tắc display của lớp (.badge, .select…),
+   nếu không phần tử bị "ẩn" vẫn hiện ra — như nhãn "Chưa ghi" luôn nổi. */
+[hidden] { display: none !important; }

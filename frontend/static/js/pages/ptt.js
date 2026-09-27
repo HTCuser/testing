@@ -435,8 +435,12 @@ async function renderNew(root, ctx) {
 
 // ------------------------------------------------------------ chi tiết phiếu
 
-async function renderTicket(root, id) {
-  root.innerHTML = loading();
+async function renderTicket(root, id, { keepScroll = false } = {}) {
+  // Làm mới sau một thao tác trên phiếu (duyệt, tiếp nhận, tích bước làm đổi
+  // trạng thái…): giữ nguyên nội dung cũ tới khi có nội dung mới và giữ vị trí
+  // cuộn, để người đang làm ở giữa bảng 56 bước không bị đẩy lên đầu trang.
+  const scrollY = window.scrollY;
+  if (!keepScroll) root.innerHTML = loading();
   let t; let cfg; let hints;
   try {
     [t, cfg, hints] = await Promise.all([api.get(`${API}/phieu/${id}`), getConfig(), api.get(`${API}/goi-y`)]);
@@ -481,7 +485,7 @@ async function renderTicket(root, id) {
     </section>
     <section class="card" style="margin-bottom:16px">
       <div class="card-head"><h2 class="card-title">Trình tự hạng mục thao tác</h2>
-        ${editable ? '' : `<div class="card-actions" style="min-width:180px">${progress({ n_steps: t.steps.length, n_done: done })}</div>`}</div>
+        ${editable ? '' : `<div class="card-actions" style="min-width:180px" id="step-progress">${progress({ n_steps: t.steps.length, n_done: done })}</div>`}</div>
       <div id="steps"></div>
     </section>
     <section class="card" style="margin-bottom:16px">
@@ -504,10 +508,11 @@ async function renderTicket(root, id) {
   if (editable) {
     grid = createStepGrid(stepsBox, t.steps, { locations: hints.locations });
   } else {
-    renderChecklist(stepsBox, t, running, () => renderTicket(root, id));
+    renderChecklist(stepsBox, t, running, () => renderTicket(root, id, { keepScroll: true }));
   }
 
-  const reload = () => renderTicket(root, id);
+  if (keepScroll) window.scrollTo(0, scrollY);
+  const reload = () => renderTicket(root, id, { keepScroll: true });
   document.querySelectorAll('[data-act]').forEach((btn) => btn.addEventListener('click', async () => {
     const act = btn.dataset.act;
     try {
@@ -547,12 +552,17 @@ async function renderTicket(root, id) {
     const form = new FormData(); form.append('file', e.target.files[0]);
     try { await api.upload(`${API}/phieu/${id}/dinh-kem`, form); reload(); } catch (err) { toast(err.message, 'error'); }
   });
-  root.addEventListener('click', async (e) => {
-    const del = e.target.closest('[data-del-att]');
-    if (!del || !(await confirmDialog('Xoá tệp đính kèm này?', { title: 'Xoá tệp' }))) return;
-    await api.del(`${API}/dinh-kem/${del.dataset.delAtt}`);
-    reload();
-  });
+  // Trang làm mới tại chỗ nhiều lần trên cùng phần tử root: chỉ gắn sự kiện
+  // một lần, nếu không mỗi lần làm mới lại thêm một hộp xác nhận xoá.
+  if (!root.dataset.attBound) {
+    root.dataset.attBound = '1';
+    root.addEventListener('click', async (e) => {
+      const del = e.target.closest('[data-del-att]');
+      if (!del || !(await confirmDialog('Xoá tệp đính kèm này?', { title: 'Xoá tệp' }))) return;
+      await api.del(`${API}/dinh-kem/${del.dataset.delAtt}`);
+      renderTicket(root, id, { keepScroll: true });
+    });
+  }
 }
 
 function renderChecklist(box, t, running, onChange) {
@@ -598,8 +608,22 @@ function renderChecklist(box, t, running, onChange) {
     cb.disabled = true;
     try {
       const updated = await api.put(`${API}/phieu/${t.id}/buoc/${cb.dataset.step}`, { done: cb.checked });
-      if (updated.steps.every((s) => s.done)) toast('Đã tích đủ các bước. Bấm "Hoàn thành phiếu" để đóng phiếu.', 'success', 7000);
-      onChange();
+      if (updated.status !== t.status) {
+        // Tích bước đầu tiên chuyển phiếu sang "Đang thực hiện": các nút thao
+        // tác phía trên đổi theo, nên làm mới cả trang (vẫn giữ chỗ đang cuộn).
+        onChange();
+        return;
+      }
+      // Chỉ cập nhật đúng dòng vừa tích và thanh tiến độ — không tải lại trang.
+      t.steps = updated.steps;
+      const step = updated.steps[i];
+      const row = cb.closest('tr');
+      row.classList.toggle('done', Boolean(step.done));
+      row.querySelector('.text-muted').textContent = step.done_at ? step.done_at.slice(11, 16) : '';
+      const bar = document.getElementById('step-progress');
+      if (bar) bar.innerHTML = progress({ n_steps: updated.steps.length, n_done: updated.steps.filter((x) => x.done).length });
+      cb.disabled = false;
+      if (updated.steps.every((x) => x.done)) toast('Đã tích đủ các bước. Bấm "Hoàn thành phiếu" để đóng phiếu.', 'success', 7000);
     } catch (err) {
       toast(err.message, 'error');
       cb.checked = !cb.checked;
