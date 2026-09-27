@@ -17,14 +17,16 @@ def _count(table: str, where: str = "", params: tuple = ()) -> int:
 
 def _tickets_today() -> dict:
     today = usage._now().date().isoformat()
+    day = "substr(CASE WHEN planned_start <> '' THEN planned_start ELSE created_at END, 1, 10)"
     row = query_one(
-        """SELECT COUNT(*) AS tong, SUM(status = 'da_thuc_hien') AS xong,
-                  SUM(status = 'da_lap') AS mo
-             FROM tickets WHERE ticket_date = ? AND status <> 'huy'""",
+        f"""SELECT COUNT(*) AS tong, SUM(status = 'hoan_thanh') AS xong,
+                   SUM(status IN ('moi_lap', 'da_duyet', 'dang_thuc_hien')) AS mo
+              FROM ptt_tickets WHERE {day} = ? AND status <> 'huy'""",
         (today,),
     )
     backlog = query_one(
-        "SELECT COUNT(*) AS n FROM tickets WHERE status = 'da_lap' AND ticket_date < ?", (today,)
+        f"""SELECT COUNT(*) AS n FROM ptt_tickets
+             WHERE status IN ('moi_lap', 'da_duyet', 'dang_thuc_hien') AND {day} < ?""", (today,)
     )
     return {"tong": row["tong"] or 0, "xong": row["xong"] or 0, "mo": row["mo"] or 0,
             "ton": backlog["n"] or 0}

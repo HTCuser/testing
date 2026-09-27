@@ -8,7 +8,8 @@ import { createJournalPage } from './pages/journal.js';
 import { createLibraryPage } from './pages/library.js';
 import { createProceduresPage } from './pages/procedures.js';
 import { setOrg } from './print.js';
-import * as tickets from './pages/tickets.js';
+import * as ptt from './pages/ptt.js';
+import * as pttTemplates from './pages/ptt-templates.js';
 import * as settings from './pages/settings.js';
 import { register, setNavigationHook, start } from './router.js';
 import { buildShell, highlightNav, resetView, setFooter, setPage } from './shell.js';
@@ -83,9 +84,10 @@ const PAGES = [
   ['/bao-duong/:id', maintenance],
   ['/su-co', incidents],
   ['/su-co/:id', incidents],
-  ['/phieu-thao-tac', tickets],
-  ['/phieu-thao-tac/:id', tickets],
-  ['/phieu-thao-tac/lap/:tid', tickets],
+  ['/phieu-thao-tac', ptt],
+  ['/phieu-thao-tac/moi', ptt],
+  ['/phieu-thao-tac/:id', ptt],
+  ['/ptt-mau', pttTemplates],
   ['/bieu-mau', forms],
   ['/bieu-mau/:id', forms],
   ['/cau-hinh', settings],

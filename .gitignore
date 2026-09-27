@@ -13,6 +13,7 @@ data/uploads/
 data/index/
 data/mau_phieu/
 data/phieu/
+data/ptt_dinh_kem/
 
 .DS_Store
 *.log

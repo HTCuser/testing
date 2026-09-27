@@ -17,6 +17,7 @@ const SOURCE_LINK = {
   su_co: (id) => `#/su-co/${id}`,
   bieu_mau: (id) => `#/bieu-mau/${id}`,
   nhat_ky_thao_tac: (id) => `#/thao-tac/${id}`,
+  ptt_mau: (id) => `#/ptt-mau?mau=${id}`,
   nhat_ky_bao_duong: (id) => `#/sua-chua/${id}`,
 };
 

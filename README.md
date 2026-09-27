@@ -29,7 +29,8 @@ Ba trang tài liệu dùng chung một kho, chỉ khác nhau ở phân loại t�
 
 | Mục | Nội dung |
 |---|---|
-| **Phiếu thao tác** | **Dashboard** kiểm soát phiếu theo ngày (phiếu trong ngày, đã thực hiện, chưa xác nhận, phiếu tồn các ngày trước, theo người thao tác, 7 ngày gần nhất); **Phiếu đã lập**; **PTT mẫu** chia theo *vận hành bình thường / bảo dưỡng, sửa chữa* và *cô lập / tái lập* |
+| **Phiếu thao tác** | Dashboard kiểm soát theo ngày; lập phiếu từ PTT mẫu; Lập → Duyệt → Tiếp nhận → Hoàn thành; VHV tích từng bước đã thực hiện; tải ra đúng mẫu phiếu Word của nhà máy |
+| **Phiếu thao tác mẫu** | Nhóm → Tên phiếu → bảng Mục / Địa điểm / Bước / Nội dung; Import Excel |
 | **Thao tác vận hành** | Vận hành viên ghi lại thao tác đã làm: thời gian, ca kíp, thiết bị, số phiếu, người ra lệnh, người thực hiện, diễn biến, bất thường phát sinh |
 | **Xử lý bất thường, sự cố** | Hiện tượng, nguyên nhân, trình tự xử lý, bài học của các bất thường/sự cố đã gặp |
 | **Bảo dưỡng, sửa chữa** | Nội dung công việc, số phiếu công tác, vật tư thay thế, hư hỏng phát hiện, kết quả |
@@ -165,47 +166,53 @@ phải đặt biến môi trường `OLLAMA_HOST=0.0.0.0` (mặc định Ollama 
 Ollama không chạy thì truy hồi **tự lùi về BM25** — hệ thống vẫn dùng được, trang Cấu hình báo
 đỏ kèm lý do. Muốn tắt hẳn nhánh ngữ nghĩa: đặt `EMBEDDING_PROVIDER=none`.
 
-### Phiếu thao tác lập từ mẫu Word
+### Phiếu thao tác
 
-Mục **Phiếu thao tác** dùng chính file Word phiếu của nhà máy làm mẫu, phần mềm chỉ lo phần thay
-đổi mỗi lần lập.
+Tổ chức theo cách làm của NKVH điện tử, gồm hai mục:
 
-**1. Chuẩn bị mẫu.** Mở phiếu bằng Word, xoá giá trị cụ thể ở chỗ thay đổi mỗi lần lập và gõ
-tên ô trong cặp ngoặc nhọn kép:
+**Phiếu thao tác mẫu** — ba cột **Nhóm → Tên phiếu → bảng bước**. Nhóm do người dùng tự đặt (lần
+đầu có sẵn 4 nhóm: vận hành bình thường / bảo dưỡng, sửa chữa × phiếu cô lập / tái lập). Bảng
+bước gồm **Mục, Địa điểm, Bước, Nội dung**:
 
-```
-Số phiếu: {{Số phiếu}}
-Người viết phiếu: {{Người viết phiếu}}      Chức vụ: {{Chức vụ người viết}}
-Bắt đầu: {{Giờ bắt đầu}}   Ngày {{Ngày}} tháng {{Tháng}} năm {{Năm}}
-```
+- Sửa trực tiếp trên bảng; **Thêm**, **Xoá** các dòng đã tích chọn; **⤒ ↑ ↓ ⤓** đưa dòng chọn lên
+  đầu, lên, xuống, xuống cuối; **Ghi** để lưu.
+- **Import Excel**: file có các cột Mục, Địa điểm, Bước, Nội dung (tìm hàng tiêu đề trong 10 hàng
+  đầu; không có tiêu đề thì hiểu 4 cột đầu theo thứ tự đó).
+- Số bước tự đánh liên tục. Ghi Mục (I, II…) và Địa điểm ở bước mở đầu, các bước sau để trống
+  là thuộc cùng mục, cùng địa điểm.
+- PTT mẫu được lập chỉ mục: hỏi trợ lý "trình tự đóng điện tủ điều khiển cửa van sự cố H2" là ra.
 
-Lưu file .docx rồi tải lên ở tab **Mẫu phiếu**. Bảng trình tự, logo, header, định dạng giữ
-nguyên. Ô có thể nằm ở bất kỳ đâu, kể cả header/footer. Cùng một tên ô xuất hiện nhiều chỗ thì
-được điền ở tất cả các chỗ. Tab **Mẫu phiếu** có nút tải **mẫu ví dụ** dựng từ phiếu "Đưa MBA
-T2-TD92 vào làm việc", đã đặt sẵn các ô để xem cách làm.
+**Phiếu thao tác** — lập từ một phiếu mẫu (chép sẵn tên, mục đích, điều kiện, các bước) hoặc
+nhập trống, rồi đi qua các mốc:
 
-| Tên ô | Phần mềm xử lý |
+| Trạng thái | Việc làm được |
 |---|---|
-| `{{Số phiếu}}` | Tự cấp số, không nhập tay |
-| `{{Ngày}}` `{{Tháng}}` `{{Năm}}` (cả ba) | Chọn một lần trên lịch, điền vào cả ba ô |
-| Tên bắt đầu bằng "Ngày…" | Chọn trên lịch, điền dạng 26/09/2026 |
-| Tên bắt đầu bằng "Giờ…" | Chọn giờ, điền dạng 08h30 |
-| Tên có "nội dung", "ghi chú", "mục đích", "điều kiện", "lưu ý"… | Ô nhập nhiều dòng |
-| Còn lại | Ô nhập một dòng, gợi ý lại các giá trị đã từng nhập |
+| **Mới lập** | Sửa mọi nội dung và các bước |
+| **Đã duyệt** | Nội dung giữ nguyên; tích bước đầu tiên là tự tiếp nhận |
+| **Đang thực hiện** | Vận hành viên **tích từng bước** khi làm xong — ghi lại giờ tích; tích vượt bước thì hỏi lại |
+| **Hoàn thành** / **Đã huỷ** | Chỉ xem, tải về |
 
-**2. Số phiếu tự tăng.** Mỗi mẫu có định dạng số, mặc định `###/YYYY/KH/HHC` (`###` là số thứ tự,
-`YYYY` là năm) → `054/2026/KH/HHC`. Các mẫu cùng định dạng dùng chung một dãy số như cùng một
-quyển sổ phiếu, sang năm mới tự đánh lại từ 001. Số chỉ được cấp lúc bấm **Lưu**: hai người lưu
-cùng lúc vẫn nhận hai số liên tiếp, không trùng. Bắt đầu dùng phần mềm giữa năm thì vào **Sửa**
-mẫu, đặt **Số tiếp theo** để nối tiếp sổ phiếu giấy.
+Trang chi tiết như NKVH: số phiếu, phân loại **Kế hoạch / Đột xuất**, đơn vị cấp phiếu, người
+viết, người duyệt, người giám sát, người thao tác kèm chức vụ và mốc thời gian lập, duyệt, tiếp
+nhận, hoàn thành; mục đích, thời gian dự kiến, đơn vị đề nghị, điều kiện, lưu ý; sự kiện bất
+thường trong thao tác; tài liệu đính kèm. **Dashboard** kiểm soát phiếu theo ngày: phiếu trong
+ngày, hoàn thành, đang duyệt/thực hiện, **phiếu tồn** (quá ngày mà chưa hoàn thành), tiến độ
+từng phiếu, theo người thao tác, 7 ngày gần nhất.
 
-**3. Quản lý.** Phiếu đã lập xem được ngay trên trình duyệt, tải về Word để in, sửa nội dung (số
-phiếu giữ nguyên), đánh dấu **Đã thực hiện** hoặc **Huỷ**. Phiếu lập sai thì huỷ chứ không xoá, để
-dãy số không bị hổng. Mẫu đã dùng để lập phiếu thì không xoá được, để phiếu cũ còn xuất lại đúng
-như lúc lập.
+**Cấu hình số phiếu**: định dạng mặc định `###/YYYY/{PL}/HHC` → `054/2026/KH/HHC`,
+`055/2026/ĐX/HHC` (`###` số thứ tự, `YYYY` năm, `{PL}` là KH hoặc ĐX). Chọn được dùng chung
+hay tách dãy số cho kế hoạch và đột xuất; đặt số tiếp theo để nối tiếp sổ giấy; sang năm mới tự
+đánh lại. Số chỉ cấp lúc lưu phiếu, hai người lưu cùng lúc vẫn không trùng.
 
-Mục **Trình tự thao tác mẫu** (trước đây tên là "Phiếu thao tác") vẫn giữ nguyên: đó là các
-trình tự chuẩn làm căn cứ tra cứu cho trợ lý.
+**Tải Word** ra đúng tờ phiếu thao tác của nhà máy (mẫu dựng từ phiếu thật "Đưa MBA T2-TD92 vào
+làm việc", đã bỏ hết nội dung riêng): điền số phiếu, người, giờ, điều kiện đánh số, và dựng lại
+bảng trình tự theo đúng số bước — cột Mục và Địa điểm gộp dọc như phiếu giấy, bước đã thực hiện
+đánh dấu X kèm giờ. Muốn dùng mẫu in khác: vào **Cấu hình số phiếu** → *Thay mẫu in khác*, đặt
+các ô `{{Số phiếu}}`, `{{Người viết phiếu}}`… (danh sách đầy đủ trong hộp cấu hình); bảng trình
+tự là bảng có cột "Nội dung" và "Bước" hoặc "Mục".
+
+Chưa có chữ ký số và đăng nhập theo người dùng: ai mở phần mềm cũng bấm được Duyệt, Tiếp nhận,
+Hoàn thành. Phần mềm ghi lại thời điểm, chưa ghi được *ai* bấm.
 
 ### Đọc tài liệu ngay trên trình duyệt
 

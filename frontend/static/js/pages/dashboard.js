@@ -58,7 +58,7 @@ export async function render(root) {
     <div class="section-title">Nghiệp vụ</div>
     <div class="grid stat-grid" style="margin-bottom:16px">
       ${statCard('forms', tk.ton ? 'red' : 'violet', 'Phiếu thao tác hôm nay', tk.tong,
-                 tk.ton ? `phiếu · ${tk.ton} tồn chưa xác nhận` : `phiếu · ${tk.mo} chưa xác nhận`, '/phieu-thao-tac')}
+                 tk.ton ? `phiếu · ${tk.ton} tồn chưa hoàn thành` : `phiếu · ${tk.mo} chưa hoàn thành`, '/phieu-thao-tac')}
       ${statCard('operations', 'green', 'Thao tác vận hành', c.journal_thao_tac, 'bản ghi', '/thao-tac')}
       ${statCard('incident', 'red', 'Xử lý bất thường, sự cố', c.incidents, 'hồ sơ', '/su-co')}
       ${statCard('maintenance', 'amber', 'Bảo dưỡng, sửa chữa', c.journal_bao_duong, 'bản ghi', '/sua-chua')}

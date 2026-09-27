@@ -11,6 +11,8 @@ INDEX_DIR = DATA_DIR / "index"
 # Mẫu phiếu thao tác (.docx) và các phiếu đã lập từ mẫu.
 TICKET_TEMPLATE_DIR = DATA_DIR / "mau_phieu"
 TICKET_DIR = DATA_DIR / "phieu"
+# Tệp đính kèm phiếu thao tác.
+PTT_FILE_DIR = DATA_DIR / "ptt_dinh_kem"
 FRONTEND_DIR = BASE_DIR / "frontend"
 DB_PATH = DATA_DIR / "huana.db"
 
@@ -96,7 +98,7 @@ MAX_UPLOAD_MB = int(_env("MAX_UPLOAD_MB", "50") or 50)
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md", ".xlsx", ".csv"}
 
-for _d in (DATA_DIR, UPLOAD_DIR, INDEX_DIR, TICKET_TEMPLATE_DIR, TICKET_DIR):
+for _d in (DATA_DIR, UPLOAD_DIR, INDEX_DIR, TICKET_TEMPLATE_DIR, TICKET_DIR, PTT_FILE_DIR):
     _d.mkdir(parents=True, exist_ok=True)
 
 

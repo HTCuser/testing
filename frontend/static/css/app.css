@@ -508,3 +508,34 @@ a:hover { text-decoration: underline; }
   background: #fafcfd; border: 1px solid var(--line); border-radius: var(--radius-sm);
   padding: 15px 17px;
 }
+
+/* ---------------------------------------------- phiếu thao tác mẫu (3 cột) */
+.ptt-panes {
+  display: grid; gap: 14px; align-items: start;
+  grid-template-columns: minmax(210px, 1fr) minmax(230px, 1.1fr) minmax(0, 2.8fr);
+}
+@media (max-width: 1180px) { .ptt-panes { grid-template-columns: 1fr 1fr; } .ptt-panes > #editor { grid-column: 1 / -1; } }
+@media (max-width: 720px) { .ptt-panes { grid-template-columns: 1fr; } }
+.ptt-pane { padding: 12px; }
+.pane-head { display: flex; gap: 6px; margin-bottom: 8px; }
+.pane-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); padding: 4px 6px 6px; border-bottom: 1px solid var(--line); }
+.pane-list { max-height: 68vh; overflow-y: auto; }
+.pane-item { display: flex; align-items: center; gap: 6px; justify-content: space-between; padding: 8px 8px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 13.5px; line-height: 1.4; border-radius: 6px; }
+.pane-item:hover { background: var(--teal-soft); }
+.pane-item.active { background: #fff3c4; font-weight: 600; }
+.pane-item .btn-icon { flex-shrink: 0; }
+.step-grid td { padding: 5px 6px; vertical-align: top; }
+.step-grid th { white-space: nowrap; }
+.step-check td { vertical-align: top; }
+.step-check tr.done td { background: #effaf3; }
+.step-check tr.done .step-text { color: var(--muted); }
+.progress { height: 8px; background: #e6edf0; border-radius: 99px; overflow: hidden; }
+.progress > span { display: block; height: 100%; background: var(--green); }
+.ptt-grid { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 8px 14px; align-items: center; }
+.ptt-grid > label, .ptt-person > label { font-size: 13px; font-weight: 700; color: var(--ink); }
+.ptt-person { display: grid; grid-template-columns: 170px minmax(140px, 1fr) auto minmax(120px, .8fr) minmax(0, 1.3fr); gap: 8px 12px; align-items: center; margin-bottom: 8px; }
+.ptt-stamp { font-size: 12.5px; color: var(--blue); line-height: 1.5; }
+@media (max-width: 900px) {
+  .ptt-grid, .ptt-person { grid-template-columns: 1fr; }
+}
+fieldset[disabled] .input, fieldset[disabled] .textarea { background: #f6f8f9; color: var(--ink); }

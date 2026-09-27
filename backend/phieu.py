@@ -15,6 +15,7 @@ from __future__ import annotations
 import io
 import re
 import unicodedata
+from copy import deepcopy
 from datetime import date
 from pathlib import Path
 
@@ -184,16 +185,179 @@ def _replace_in_paragraph(p, pattern: re.Pattern, lookup) -> None:
 
 def fill(path: Path, values: dict[str, str]) -> bytes:
     """Điền giá trị vào mẫu, trả về nội dung file .docx."""
+    doc = Document(str(path))
+    fill_document(doc, values)
+    return _save(doc)
+
+
+def fill_document(doc, values: dict[str, str]) -> None:
     by_key = {normalize(k): v for k, v in values.items()}
 
     def lookup(match):
         return by_key.get(normalize(match.group(1).strip()))
 
-    doc = Document(str(path))
     for root in _parts(doc):
         for p in list(_paragraphs(root)):
             _replace_in_paragraph(p, PLACEHOLDER_RE, lookup)
+
+
+def render_ticket(layout: Path, values: dict[str, str], steps: list[dict]) -> bytes:
+    """Phiếu thao tác hoàn chỉnh: điền các ô {{...}} rồi dựng bảng trình tự."""
+    doc = Document(str(layout))
+    fill_document(doc, values)
+    fill_steps(doc, steps)
     return _save(doc)
+
+
+# ------------------------------------------------------------ bảng trình tự
+
+_STEP_LABELS = {
+    "muc": "section", "dia diem": "location", "buoc": "no", "stt": "no",
+    "noi dung": "content", "da thuc hien": "done", "ket thuc": "done_at",
+}
+_HEADER_WORDS = {"muc", "dia diem", "trinh tu thao tac", "buoc", "stt", "noi dung",
+                 "da thuc hien", "thoi gian", "bat dau", "ket thuc", "nguoi",
+                 "ra lenh", "nhan lenh", "ghi chu", "noi dung thao tac"}
+
+
+def _label(text: str) -> str:
+    return normalize(text).strip().rstrip(":").strip()
+
+
+def _find_step_table(doc):
+    """Bảng trình tự: bảng có tiêu đề cột "Nội dung" cùng "Bước" hoặc "Mục"."""
+    for table in doc.tables:
+        head = {_label(c.text) for row in table.rows[:3] for c in row.cells}
+        if any("noi dung" in h for h in head) and ({"buoc", "muc", "stt"} & head):
+            return table
+    return None
+
+
+def _grid_map(tr) -> list:
+    """Cột lưới → phần tử ô (w:tc) của một hàng, tính cả ô gộp ngang."""
+    out = []
+    for tc in tr.findall(qn("w:tc")):
+        pr = tc.find(qn("w:tcPr"))
+        span = pr.find(qn("w:gridSpan")) if pr is not None else None
+        out.extend([tc] * (int(span.get(qn("w:val"))) if span is not None else 1))
+    return out
+
+
+def _set_vmerge(tc, mode: str | None) -> None:
+    pr = tc.find(qn("w:tcPr"))
+    if pr is None:
+        pr = tc.makeelement(qn("w:tcPr"), {})
+        tc.insert(0, pr)
+    for old in pr.findall(qn("w:vMerge")):
+        pr.remove(old)
+    if mode:
+        vm = pr.makeelement(qn("w:vMerge"), {qn("w:val"): "restart"} if mode == "restart" else {})
+        # vMerge phải đứng sau tcW/gridSpan theo thứ tự lược đồ của Word.
+        anchor = None
+        for tag in ("w:tcW", "w:gridSpan", "w:hMerge"):
+            found = pr.find(qn(tag))
+            if found is not None:
+                anchor = found
+        if anchor is not None:
+            anchor.addnext(vm)
+        else:
+            pr.insert(0, vm)
+
+
+def _set_cell_text(tc, text: str) -> None:
+    """Thay chữ trong ô, giữ định dạng đoạn và phông chữ của ô mẫu."""
+    paras = tc.findall(qn("w:p"))
+    if not paras:
+        paras = [tc.makeelement(qn("w:p"), {})]
+        tc.append(paras[0])
+    first = paras[0]
+    for extra in paras[1:]:
+        tc.remove(extra)
+    runs = first.findall(qn("w:r"))
+    rpr = runs[0].find(qn("w:rPr")) if runs else None
+    for child in list(first):
+        if child.tag != qn("w:pPr"):
+            first.remove(child)
+    if not text:
+        return
+    run = first.makeelement(qn("w:r"), {})
+    if rpr is not None:
+        run.append(deepcopy(rpr))
+    t = run.makeelement(qn("w:t"), {})
+    run.append(t)
+    first.append(run)
+    _set_text(t, text)
+    _split_lines(t)
+
+
+def fill_steps(doc, steps: list[dict]) -> None:
+    """Dựng lại bảng trình tự theo danh sách bước.
+
+    Giữ nguyên các hàng tiêu đề, lấy hàng dữ liệu đầu tiên làm khuôn (phông,
+    viền, độ rộng cột), xoá các hàng dữ liệu cũ rồi sinh một hàng cho mỗi bước.
+    Cột "Mục" và "Địa điểm" gộp dọc như phiếu giấy: chỉ ghi ở bước mở đầu mục
+    hoặc đổi địa điểm, các bước sau gộp chung ô.
+    """
+    table = _find_step_table(doc)
+    if table is None:
+        return
+    rows = table.rows
+    n_head = 0
+    for row in rows:
+        labels = {_label(c.text) for c in row.cells if c.text.strip()}
+        if labels and labels <= _HEADER_WORDS:
+            n_head += 1
+        else:
+            break
+    n_head = max(n_head, 1)
+    if len(rows) <= n_head:
+        return
+
+    # Cột nào là gì, đọc từ các hàng tiêu đề (tiêu đề hai tầng thì lấy tầng dưới).
+    columns: dict[int, str] = {}
+    for row in rows[:n_head]:
+        for i, cell in enumerate(row.cells):
+            key = _STEP_LABELS.get(_label(cell.text))
+            if key:
+                columns[i] = key
+
+    proto = deepcopy(rows[n_head]._tr)
+    tbl = table._tbl
+    for row in list(rows[n_head:]):
+        tbl.remove(row._tr)
+
+    started = False
+    for no, step in enumerate(steps or [{}], start=1):
+        tr = deepcopy(proto)
+        grid = _grid_map(tr)
+        new_section = bool(step.get("section"))
+        new_location = bool(step.get("location")) or new_section
+        seen = set()
+        for col, tc in enumerate(grid):
+            if id(tc) in seen:
+                continue
+            seen.add(id(tc))
+            key = columns.get(col)
+            if key == "section":
+                _set_vmerge(tc, "restart" if new_section or not started else "continue")
+                _set_cell_text(tc, step.get("section", "") if new_section or not started else "")
+            elif key == "location":
+                _set_vmerge(tc, "restart" if new_location or not started else "continue")
+                _set_cell_text(tc, step.get("location", "") if new_location or not started else "")
+            else:
+                _set_vmerge(tc, None)
+                value = ""
+                if key == "no" and steps:
+                    value = str(no)
+                elif key == "content":
+                    value = step.get("content", "")
+                elif key == "done" and step.get("done"):
+                    value = "X"
+                elif key == "done_at" and step.get("done_at"):
+                    value = step["done_at"][11:16].replace(":", "h")
+                _set_cell_text(tc, value)
+        tbl.append(tr)
+        started = True
 
 
 def replace_text(path: Path, mapping: list[tuple[str, str]]) -> bytes:

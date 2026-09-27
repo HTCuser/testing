@@ -82,7 +82,7 @@ def suggestions(kind: str) -> dict:
         out[field] = [r["v"] for r in rows]
     if kind == "thao_tac":
         # Số phiếu thao tác lập gần đây, để gắn nhật ký với phiếu đã thực hiện.
-        rows = query("SELECT code FROM tickets WHERE status <> 'huy' ORDER BY id DESC LIMIT 30")
+        rows = query("SELECT code FROM ptt_tickets WHERE status <> 'huy' ORDER BY id DESC LIMIT 30")
         out["ref"] = [r["code"] for r in rows]
     else:
         out["ref"] = [r["ref"] for r in query(
@@ -95,7 +95,7 @@ def suggestions(kind: str) -> dict:
 def get_entry(entry_id: int) -> dict:
     entry = _get(entry_id)
     if entry["kind"] == "thao_tac" and entry["ref"]:
-        ticket = query_one("SELECT id FROM tickets WHERE code = ?", (entry["ref"].strip(),))
+        ticket = query_one("SELECT id FROM ptt_tickets WHERE code = ?", (entry["ref"].strip(),))
         entry["ticket_id"] = ticket["id"] if ticket else None
     return entry
 

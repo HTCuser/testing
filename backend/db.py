@@ -213,6 +213,89 @@ CREATE TABLE IF NOT EXISTS journal (
 );
 CREATE INDEX IF NOT EXISTS idx_journal_kind_time ON journal(kind, started_at);
 
+-- ====================== Phiếu thao tác (theo cách tổ chức của NKVH điện tử)
+-- Cấu hình chung dạng khoá - giá trị (định dạng số phiếu, mẫu in Word...).
+CREATE TABLE IF NOT EXISTS app_settings (
+    key    TEXT PRIMARY KEY,
+    value  TEXT NOT NULL DEFAULT ''
+);
+
+-- Nhóm PTT mẫu: người dùng tự đặt ("PTT MẪU TỔ MÁY H1", "PTT KH 2025"...).
+CREATE TABLE IF NOT EXISTS ptt_groups (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL,
+    sort_order  INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- PTT mẫu. steps là danh sách bước [{section, location, content}] — sửa và
+-- ghi cả bảng một lần như trên NKVH, nên lưu nguyên khối.
+CREATE TABLE IF NOT EXISTS ptt_templates (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id    INTEGER NOT NULL REFERENCES ptt_groups(id) ON DELETE CASCADE,
+    name        TEXT NOT NULL,
+    purpose     TEXT NOT NULL DEFAULT '',
+    conditions  TEXT NOT NULL DEFAULT '',
+    notes       TEXT NOT NULL DEFAULT '',
+    steps       TEXT NOT NULL DEFAULT '[]',
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_ptt_templates_group ON ptt_templates(group_id);
+
+-- Phiếu thao tác. Số phiếu cấp một lần lúc lập, không đổi; lập sai thì huỷ.
+CREATE TABLE IF NOT EXISTS ptt_tickets (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    template_id      INTEGER REFERENCES ptt_templates(id) ON DELETE SET NULL,
+    book             TEXT NOT NULL,
+    year             INTEGER NOT NULL,
+    number           INTEGER NOT NULL,
+    code             TEXT NOT NULL,
+    kind             TEXT NOT NULL DEFAULT 'ke_hoach',   -- ke_hoach | dot_xuat
+    name             TEXT NOT NULL,
+    purpose          TEXT NOT NULL DEFAULT '',
+    conditions       TEXT NOT NULL DEFAULT '',
+    notes            TEXT NOT NULL DEFAULT '',
+    requesting_unit  TEXT NOT NULL DEFAULT '',
+    issuing_unit     TEXT NOT NULL DEFAULT '',
+    planned_start    TEXT NOT NULL DEFAULT '',
+    planned_end      TEXT NOT NULL DEFAULT '',
+    people           TEXT NOT NULL DEFAULT '{}',
+    abnormal         TEXT NOT NULL DEFAULT '',
+    status           TEXT NOT NULL DEFAULT 'moi_lap',
+    approved_at      TEXT NOT NULL DEFAULT '',
+    received_at      TEXT NOT NULL DEFAULT '',
+    completed_at     TEXT NOT NULL DEFAULT '',
+    cancelled_at     TEXT NOT NULL DEFAULT '',
+    cancel_reason    TEXT NOT NULL DEFAULT '',
+    created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (book, year, number)
+);
+
+-- Bước của từng phiếu, mỗi bước một dòng: nhiều người tích bước cùng lúc
+-- không ghi đè lên nhau.
+CREATE TABLE IF NOT EXISTS ptt_ticket_steps (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticket_id   INTEGER NOT NULL REFERENCES ptt_tickets(id) ON DELETE CASCADE,
+    ord         INTEGER NOT NULL,
+    section     TEXT NOT NULL DEFAULT '',
+    location    TEXT NOT NULL DEFAULT '',
+    content     TEXT NOT NULL,
+    done        INTEGER NOT NULL DEFAULT 0,
+    done_at     TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_ptt_steps_ticket ON ptt_ticket_steps(ticket_id, ord);
+
+CREATE TABLE IF NOT EXISTS ptt_attachments (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticket_id    INTEGER NOT NULL REFERENCES ptt_tickets(id) ON DELETE CASCADE,
+    filename     TEXT NOT NULL,
+    stored_name  TEXT NOT NULL,
+    size_bytes   INTEGER NOT NULL DEFAULT 0,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS ask_usage (
     period_kind   TEXT NOT NULL,
     period_key    TEXT NOT NULL,
