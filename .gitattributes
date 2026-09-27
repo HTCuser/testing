@@ -1,0 +1,4 @@
+# Tệp .bat phải xuống dòng kiểu Windows (CRLF): cmd đọc sai khối lệnh
+# nhiều dòng khi tệp chỉ có LF.
+*.bat text eol=crlf
+*.sh text eol=lf

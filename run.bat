@@ -48,6 +48,27 @@ if not exist data\huana.db (
   python -m backend.seed
 )
 
+rem Cong dang bi chiem: thuong la cua so run.bat lan truoc van con mo.
+set BUSY_PID=
+for /f "tokens=5" %%p in ('netstat -ano -p tcp ^| findstr /r /c:"^ *TCP *[0-9.]*:%PORT% "') do set BUSY_PID=%%p
+if defined BUSY_PID (
+  echo.
+  echo [LOI] Cong %PORT% dang bi chuong trinh khac chiem ^(PID %BUSY_PID%^):
+  tasklist /fi "PID eq %BUSY_PID%" /fo table /nh
+  echo.
+  echo  Thuong la phan mem nay dang chay san o mot cua so run.bat khac.
+  echo  - Neu vay: mo trinh duyet vao http://localhost:%PORT% la dung duoc ngay,
+  echo    hoac vao cua so do bam Ctrl + C roi chay lai run.bat.
+  echo.
+  choice /c CK /n /m "Tat chuong trinh dang chiem cong de chay lai? [C = Co, K = Khong] "
+  if errorlevel 2 (
+    pause
+    exit /b 1
+  )
+  taskkill /PID %BUSY_PID% /F
+  timeout /t 2 /nobreak >nul
+)
+
 echo.
 echo ==^> May chu dang chay. Mo trinh duyet tai:
 echo       http://localhost:%PORT%
