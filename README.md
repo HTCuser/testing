@@ -241,6 +241,12 @@ lại từ đầu, chứ không chỉ nạp lại phần đã cắt trong CSDL. 
 được cải tiến theo từng bản, nên sau mỗi lần `git pull` hãy bấm nút này một lần — không phải
 xoá và tải lên lại từng tài liệu.
 
+### Trang đứng ở "Đang khởi động hệ thống…" sau khi cập nhật
+
+Do trình duyệt còn giữ vài file giao diện của bản cũ. Máy chủ nay gửi kèm `Cache-Control: no-cache`
+để trình duyệt luôn hỏi lại, và trang tự nạp lại toàn bộ file giao diện một lần nếu không khởi
+động được. Máy nào vẫn mở giao diện từ trước bản này thì bấm **Ctrl + F5** một lần.
+
 ### Soi thứ hạng khi một câu hỏi tra ra sai
 
 ```bash

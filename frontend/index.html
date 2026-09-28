@@ -18,6 +18,36 @@
       </div>
     </div>
   </div>
+  <script>
+    // Sau khi cập nhật phần mềm, trình duyệt có thể còn giữ vài file giao diện cũ:
+    // trang đứng mãi ở "Đang khởi động". Khi đó tự nạp lại toàn bộ file một lần;
+    // vẫn không được thì hướng dẫn người dùng.
+    (function () {
+      var KEY = 'huana-boot-retry';
+      var handled = false;
+      function stuck() {
+        if (handled || window.__appStarted) return;
+        handled = true;
+        var tried = false;
+        try { tried = sessionStorage.getItem(KEY) === '1'; sessionStorage.setItem(KEY, '1'); } catch (e) { tried = true; }
+        if (!tried) {
+          fetch('/api/giao-dien/tep', { cache: 'reload' }).then(function (r) { return r.json(); })
+            .then(function (d) { return Promise.all(d.files.map(function (f) { return fetch(f, { cache: 'reload' }); })); })
+            .catch(function () {})
+            .then(function () { location.reload(); });
+          return;
+        }
+        var p = document.querySelector('#root p');
+        if (p) {
+          p.innerHTML = 'Không nạp được giao diện.<br>Bấm <b>Ctrl + F5</b> để tải lại. Nếu vẫn vậy, kiểm tra cửa sổ run.bat còn chạy không.';
+        }
+        var s = document.querySelector('#root .spinner');
+        if (s) s.style.display = 'none';
+      }
+      window.addEventListener('error', function () { setTimeout(stuck, 300); });
+      setTimeout(stuck, 5000);
+    })();
+  </script>
   <script type="module" src="/static/js/app.js"></script>
 </body>
 </html>

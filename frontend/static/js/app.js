@@ -121,6 +121,9 @@ setNavigationHook(async (location, found) => {
 });
 
 async function boot() {
+  // Các module đã nạp đủ — báo cho đoạn kiểm tra trong index.html.
+  window.__appStarted = true;
+  try { sessionStorage.removeItem('huana-boot-retry'); } catch { /* không có sessionStorage */ }
   let plantName = 'Nhà máy Thủy điện Hủa Na';
   try {
     const cfg = await api.config();
