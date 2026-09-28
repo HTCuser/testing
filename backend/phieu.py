@@ -201,19 +201,29 @@ def fill_document(doc, values: dict[str, str]) -> None:
             _replace_in_paragraph(p, PLACEHOLDER_RE, lookup)
 
 
-def render_ticket(layout: Path, values: dict[str, str], steps: list[dict]) -> bytes:
-    """Phiếu thao tác hoàn chỉnh: điền các ô {{...}} rồi dựng bảng trình tự."""
+def render_ticket(layout: Path, values: dict[str, str], steps: list[dict],
+                  handover: tuple[list, list] = ([], [])) -> bytes:
+    """Phiếu thao tác hoàn chỉnh: điền các ô {{...}}, dựng bảng trình tự và
+    hai bảng giao nhận, nghiệm thu trước / sau thao tác."""
     doc = Document(str(layout))
     fill_document(doc, values)
     fill_steps(doc, steps)
+    fill_handover(doc, *handover)
     return _save(doc)
+
+
+def short_name(full: str) -> str:
+    """Tên gọi (chữ cuối của họ tên), như cột người ra lệnh / nhận lệnh trên NKVH."""
+    parts = (full or "").split()
+    return parts[-1] if parts else ""
 
 
 # ------------------------------------------------------------ bảng trình tự
 
 _STEP_LABELS = {
     "muc": "section", "dia diem": "location", "buoc": "no", "stt": "no",
-    "noi dung": "content", "da thuc hien": "done", "ket thuc": "done_at",
+    "noi dung": "content", "da thuc hien": "done", "bat dau": "start", "ket thuc": "end",
+    "ra lenh": "commander", "nhan lenh": "receiver",
 }
 _HEADER_WORDS = {"muc", "dia diem", "trinh tu thao tac", "buoc", "stt", "noi dung",
                  "da thuc hien", "thoi gian", "bat dau", "ket thuc", "nguoi",
@@ -326,6 +336,12 @@ def fill_steps(doc, steps: list[dict]) -> None:
     for row in list(rows[n_head:]):
         tbl.remove(row._tr)
 
+    # Giờ bắt đầu chỉ ghi ở bước đầu tiên (lúc tích bước đầu), giờ kết thúc
+    # chỉ ghi ở bước cuối cùng khi đã tích đủ — như cột thời gian trên NKVH.
+    ticks = sorted(x["done_at"] for x in steps if x.get("done") and x.get("done_at"))
+    start_time = ticks[0][11:16] if ticks else ""
+    end_time = ticks[-1][11:16] if ticks and all(x.get("done") for x in steps) else ""
+
     started = False
     for no, step in enumerate(steps or [{}], start=1):
         tr = deepcopy(proto)
@@ -353,8 +369,14 @@ def fill_steps(doc, steps: list[dict]) -> None:
                     value = step.get("content", "")
                 elif key == "done" and step.get("done"):
                     value = "X"
-                elif key == "done_at" and step.get("done_at"):
-                    value = step["done_at"][11:16].replace(":", "h")
+                elif key == "start" and no == 1:
+                    value = start_time
+                elif key == "end" and no == len(steps):
+                    value = end_time
+                elif key == "commander" and step.get("done"):
+                    value = short_name(step.get("commander", ""))
+                elif key == "receiver" and step.get("done"):
+                    value = short_name(step.get("receiver", ""))
                 _set_cell_text(tc, value)
         tbl.append(tr)
         started = True
@@ -404,3 +426,43 @@ def date_parts(value: str) -> dict[str, str]:
         "month": str(d.month),
         "year": str(d.year),
     }
+
+
+
+# ------------------------------------------------ bảng giao nhận, nghiệm thu
+
+_HANDOVER_COLS = {"thoi gian": "time", "don vi": "unit", "ho ten": "name", "noi dung": "content"}
+
+
+def fill_handover(doc, before: list[dict], after: list[dict]) -> None:
+    """Điền hai bảng "Giao nhận, nghiệm thu ... trước / sau khi thao tác".
+
+    Nhận ra bảng qua hàng tiêu đề Thời gian | Đơn vị | Họ tên | Nội dung; bảng
+    thứ nhất là trước thao tác, bảng thứ hai là sau. Không có dòng nào thì giữ
+    nguyên các dòng trống của mẫu để ghi tay.
+    """
+    tables = []
+    for table in doc.tables:
+        head = {_label(c.text) for c in table.rows[0].cells if c.text.strip()}
+        if set(_HANDOVER_COLS) <= head:
+            tables.append(table)
+    for table, rows in zip(tables, (before, after)):
+        if not rows or len(table.rows) < 2:
+            continue
+        columns = {i: _HANDOVER_COLS[_label(c.text)] for i, c in enumerate(table.rows[0].cells)
+                   if _label(c.text) in _HANDOVER_COLS}
+        blank_rows = len(table.rows) - 1
+        proto = deepcopy(table.rows[1]._tr)
+        tbl = table._tbl
+        for row in list(table.rows[1:]):
+            tbl.remove(row._tr)
+        for record in list(rows) + [{}] * max(0, blank_rows - len(rows)):
+            tr = deepcopy(proto)
+            seen = set()
+            for col, tc in enumerate(_grid_map(tr)):
+                if id(tc) in seen:
+                    continue
+                seen.add(id(tc))
+                _set_vmerge(tc, None)
+                _set_cell_text(tc, str(record.get(columns.get(col, ""), "") or ""))
+            tbl.append(tr)

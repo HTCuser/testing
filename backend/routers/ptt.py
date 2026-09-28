@@ -469,6 +469,17 @@ class TicketIn(BaseModel):
     steps: list[Step] = []
 
 
+class HandoverRow(BaseModel):
+    time: str = ""
+    unit: str = ""
+    name: str = ""
+    content: str = ""
+
+
+def _clean_handover(rows: list[HandoverRow]) -> list[dict]:
+    return [r for r in (x.model_dump() for x in rows) if any(str(v).strip() for v in r.values())]
+
+
 class TicketUpdate(BaseModel):
     kind: str | None = None
     name: str | None = None
@@ -481,6 +492,8 @@ class TicketUpdate(BaseModel):
     people: People | None = None
     steps: list[Step] | None = None
     abnormal: str | None = None
+    handover_before: list[HandoverRow] | None = None
+    handover_after: list[HandoverRow] | None = None
 
 
 def _ticket(ticket_id: int, with_steps: bool = True) -> dict:
@@ -489,6 +502,8 @@ def _ticket(ticket_id: int, with_steps: bool = True) -> dict:
         raise HTTPException(404, "Không tìm thấy phiếu thao tác")
     t = dict(row)
     t["people"] = _loads(t["people"], {})
+    t["handover_before"] = _loads(t.get("handover_before"), [])
+    t["handover_after"] = _loads(t.get("handover_after"), [])
     t["status_label"] = STATUSES.get(t["status"], t["status"])
     t["kind_label"] = KINDS.get(t["kind"], (t["kind"],))[0]
     if with_steps:
@@ -672,6 +687,12 @@ def update_ticket(ticket_id: int, payload: TicketUpdate) -> dict:
     if "people" in data:
         sets.append("people = ?")
         params.append(_dumps(data["people"]))
+    # Giao nhận, nghiệm thu diễn ra lúc thực hiện nên ghi được sau khi duyệt.
+    for key in ("handover_before", "handover_after"):
+        rows = getattr(payload, key)
+        if rows is not None:
+            sets.append(f"{key} = ?")
+            params.append(_dumps(_clean_handover(rows)))
     if sets:
         conn.execute(f"UPDATE ptt_tickets SET {', '.join(sets)}, updated_at = datetime('now') WHERE id = ?",
                      (*params, ticket_id))
@@ -722,6 +743,10 @@ def cancel(ticket_id: int, payload: CancelIn) -> dict:
 
 class StepToggle(BaseModel):
     done: bool
+    # Người ra lệnh / nhận lệnh bước này. Bỏ trống thì lấy người giám sát và
+    # người thao tác đầu tiên của phiếu, như NKVH.
+    commander: str | None = None
+    receiver: str | None = None
 
 
 @router.put("/phieu/{ticket_id}/buoc/{step_id}")
@@ -734,8 +759,17 @@ def toggle_step(ticket_id: int, step_id: int, payload: StepToggle) -> dict:
     if step is None:
         raise HTTPException(404, "Không tìm thấy bước")
     conn = get_conn()
-    conn.execute("UPDATE ptt_ticket_steps SET done = ?, done_at = ? WHERE id = ?",
-                 (1 if payload.done else 0, _now_iso() if payload.done else "", step_id))
+    if payload.done:
+        people = t["people"]
+        commander = payload.commander if payload.commander is not None else \
+            ((people.get("giam_sat") or [{}])[0].get("name", ""))
+        receiver = payload.receiver if payload.receiver is not None else \
+            ((people.get("thao_tac") or [{}])[0].get("name", ""))
+        conn.execute("UPDATE ptt_ticket_steps SET done = 1, done_at = ?, commander = ?, receiver = ? WHERE id = ?",
+                     (_now_iso(), commander.strip(), receiver.strip(), step_id))
+    else:
+        conn.execute("UPDATE ptt_ticket_steps SET done = 0, done_at = '', commander = '', receiver = '' "
+                     "WHERE id = ?", (step_id,))
     if payload.done and t["status"] == "da_duyet":
         # Bắt đầu tích bước tức là đã tiếp nhận phiếu và bắt tay thao tác.
         conn.execute("UPDATE ptt_tickets SET status = 'dang_thuc_hien', received_at = ? WHERE id = ?",
@@ -839,7 +873,8 @@ def _layout_values(t: dict) -> dict[str, str]:
 
 def _render_word(ticket_id: int) -> tuple[dict, bytes]:
     t = _ticket(ticket_id)
-    data = phieu.render_ticket(_layout_path(), _layout_values(t), t["steps"])
+    data = phieu.render_ticket(_layout_path(), _layout_values(t), t["steps"],
+                               handover=(t["handover_before"], t["handover_after"]))
     return t, data
 
 

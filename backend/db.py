@@ -262,6 +262,8 @@ CREATE TABLE IF NOT EXISTS ptt_tickets (
     planned_end      TEXT NOT NULL DEFAULT '',
     people           TEXT NOT NULL DEFAULT '{}',
     abnormal         TEXT NOT NULL DEFAULT '',
+    handover_before  TEXT NOT NULL DEFAULT '[]',  -- giao nhận, nghiệm thu trước thao tác
+    handover_after   TEXT NOT NULL DEFAULT '[]',  -- giao nhận, nghiệm thu sau thao tác
     status           TEXT NOT NULL DEFAULT 'moi_lap',
     approved_at      TEXT NOT NULL DEFAULT '',
     received_at      TEXT NOT NULL DEFAULT '',
@@ -283,7 +285,9 @@ CREATE TABLE IF NOT EXISTS ptt_ticket_steps (
     location    TEXT NOT NULL DEFAULT '',
     content     TEXT NOT NULL,
     done        INTEGER NOT NULL DEFAULT 0,
-    done_at     TEXT NOT NULL DEFAULT ''
+    done_at     TEXT NOT NULL DEFAULT '',
+    commander   TEXT NOT NULL DEFAULT '',   -- người ra lệnh bước này
+    receiver    TEXT NOT NULL DEFAULT ''    -- người nhận lệnh (thao tác)
 );
 CREATE INDEX IF NOT EXISTS idx_ptt_steps_ticket ON ptt_ticket_steps(ticket_id, ord);
 
@@ -331,6 +335,27 @@ def init_db() -> None:
     conn.executescript(SCHEMA)
     conn.commit()
     _migrate_forms(conn)
+    _migrate_ptt(conn)
+
+
+def _add_columns(conn: sqlite3.Connection, table: str, columns: dict[str, str]) -> None:
+    have = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+    for name, decl in columns.items():
+        if name not in have:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+    conn.commit()
+
+
+def _migrate_ptt(conn: sqlite3.Connection) -> None:
+    """Thêm cột mới cho phiếu thao tác đã lập từ bản trước, không đụng dữ liệu cũ."""
+    _add_columns(conn, "ptt_ticket_steps", {
+        "commander": "TEXT NOT NULL DEFAULT ''",
+        "receiver": "TEXT NOT NULL DEFAULT ''",
+    })
+    _add_columns(conn, "ptt_tickets", {
+        "handover_before": "TEXT NOT NULL DEFAULT '[]'",
+        "handover_after": "TEXT NOT NULL DEFAULT '[]'",
+    })
 
 
 def _migrate_forms(conn: sqlite3.Connection) -> None:

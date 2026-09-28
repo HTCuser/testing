@@ -483,11 +483,13 @@ async function renderTicket(root, id, { keepScroll = false } = {}) {
     <section class="card" style="margin-bottom:16px">
       <form id="ptt-form" onsubmit="return false">${headerForm(t, hints, cfg, { locked: !editable, stamps })}</form>
     </section>
+    ${handoverCard('before', 'Giao nhận, nghiệm thu đường dây, thiết bị điện trước khi thao tác (nếu có)', t.handover_before, !closed)}
     <section class="card" style="margin-bottom:16px">
       <div class="card-head"><h2 class="card-title">Trình tự hạng mục thao tác</h2>
         ${editable ? '' : `<div class="card-actions" style="min-width:180px" id="step-progress">${progress({ n_steps: t.steps.length, n_done: done })}</div>`}</div>
       <div id="steps"></div>
     </section>
+    ${handoverCard('after', 'Giao nhận, nghiệm thu đường dây, thiết bị điện sau khi thao tác (nếu có)', t.handover_after, !closed)}
     <section class="card" style="margin-bottom:16px">
       <div class="card-head"><h2 class="card-title">Các sự kiện bất thường trong thao tác</h2>
         ${closed ? '' : `<div class="card-actions"><button class="btn btn-sm" id="save-abn">${icon('check', 15)}Ghi</button></div>`}</div>
@@ -513,6 +515,7 @@ async function renderTicket(root, id, { keepScroll = false } = {}) {
 
   if (keepScroll) window.scrollTo(0, scrollY);
   const reload = () => renderTicket(root, id, { keepScroll: true });
+  bindHandover(root, id);
   document.querySelectorAll('[data-act]').forEach((btn) => btn.addEventListener('click', async () => {
     const act = btn.dataset.act;
     try {
@@ -565,61 +568,99 @@ async function renderTicket(root, id, { keepScroll = false } = {}) {
   }
 }
 
+const shortName = (full) => (full || '').trim().split(/\s+/).pop() || '';
+
+// Giờ bắt đầu = lúc tích bước đầu tiên (ghi ở dòng đầu); giờ kết thúc = lúc tích
+// bước cuối cùng, chỉ có khi đã tích đủ (ghi ở dòng cuối) — như NKVH.
+function stepTimes(steps) {
+  const ticks = steps.filter((s) => s.done && s.done_at).map((s) => s.done_at).sort();
+  return {
+    start: ticks.length ? ticks[0].slice(11, 16) : '',
+    end: ticks.length && steps.every((s) => s.done) ? ticks[ticks.length - 1].slice(11, 16) : '',
+  };
+}
+
+function peopleOptions(list, name) {
+  const names = (list || []).map((p) => p.name).filter(Boolean);
+  if (!names.length) return '';
+  return `<select class="select" id="${name}" style="width:auto;padding:5px 30px 5px 9px">
+    ${names.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}</select>`;
+}
+
 function renderChecklist(box, t, running, onChange) {
   let section = '';
   let location = '';
-  box.innerHTML = `<div style="overflow-x:auto"><table class="table step-check">
-    <thead><tr><th style="width:56px">Mục</th><th style="width:140px">Địa điểm</th><th style="width:52px;text-align:center">Bước</th>
-      <th>Nội dung</th><th style="width:110px;text-align:center">Đã thực hiện</th></tr></thead>
+  const times = stepTimes(t.steps);
+  const last = t.steps.length - 1;
+  const people = t.people || {};
+  box.innerHTML = `
+    ${running ? `<div class="toolbar" style="margin-bottom:10px;align-items:center;font-size:13px">
+      <span class="text-muted">Tích bước sẽ ghi</span>
+      <b>Người ra lệnh</b> ${peopleOptions(people.giam_sat, 'cmd-by') || '<span class="text-muted">(chưa khai người giám sát)</span>'}
+      <b>Người nhận lệnh</b> ${peopleOptions(people.thao_tac, 'rcv-by') || '<span class="text-muted">(chưa khai người thao tác)</span>'}
+    </div>` : ''}
+    <div style="overflow-x:auto"><table class="table step-check">
+    <thead><tr><th style="width:52px">Mục</th><th style="width:120px">Địa điểm</th><th style="width:48px;text-align:center">Bước</th>
+      <th>Nội dung</th><th style="width:78px;text-align:center">Đã thực hiện</th>
+      <th style="width:78px;text-align:center">Thời gian bắt đầu</th><th style="width:78px;text-align:center">Thời gian kết thúc</th>
+      <th style="width:84px;text-align:center">Người ra lệnh</th><th style="width:84px;text-align:center">Người nhận lệnh</th></tr></thead>
     <tbody>${t.steps.map((s, i) => {
       const showSec = s.section && s.section !== section;
       const showLoc = (s.location && s.location !== location) || showSec;
       section = s.section || section;
       location = s.location || (showSec ? '' : location);
-      return `<tr class="${s.done ? 'done' : ''}">
+      return `<tr class="${s.done ? 'done' : ''}" data-row="${i}">
         <td style="font-weight:700">${showSec ? esc(s.section) : ''}</td>
         <td>${showLoc ? esc(s.location) : ''}</td>
         <td style="text-align:center;font-weight:700;color:var(--muted)">${i + 1}</td>
         <td class="step-text" style="white-space:pre-wrap;line-height:1.55">${esc(s.content)}</td>
         <td style="text-align:center">
-          <label style="display:inline-flex;flex-direction:column;align-items:center;gap:2px;cursor:${running ? 'pointer' : 'default'}">
-            <input type="checkbox" data-step="${s.id}" data-i="${i}" ${s.done ? 'checked' : ''} ${running ? '' : 'disabled'}
-                   style="width:20px;height:20px">
-            <span class="text-muted" style="font-size:11.5px">${s.done_at ? esc(s.done_at.slice(11, 16)) : ''}</span>
-          </label>
-        </td></tr>`;
-    }).join('')}</tbody></table></div>
-    ${running ? '' : `<p class="text-muted" style="font-size:12.5px;margin:8px 0 0">${t.status === 'moi_lap' ? '' : 'Phiếu đã đóng, không tích được nữa.'}</p>`}`;
+          <input type="checkbox" data-step="${s.id}" data-i="${i}" ${s.done ? 'checked' : ''} ${running ? '' : 'disabled'}
+                 title="${s.done_at ? `Tích lúc ${esc(s.done_at.slice(11, 16))} ${esc(s.done_at.slice(8, 10))}/${esc(s.done_at.slice(5, 7))}` : ''}"
+                 style="width:20px;height:20px;cursor:${running ? 'pointer' : 'default'}"></td>
+        <td style="text-align:center" ${i === 0 ? 'id="t-start"' : ''}>${i === 0 ? esc(times.start) : ''}</td>
+        <td style="text-align:center" ${i === last ? 'id="t-end"' : ''}>${i === last ? esc(times.end) : ''}</td>
+        <td style="text-align:center" data-cmd title="${esc(s.commander || '')}">${s.done ? esc(shortName(s.commander)) : ''}</td>
+        <td style="text-align:center" data-rcv title="${esc(s.receiver || '')}">${s.done ? esc(shortName(s.receiver)) : ''}</td>
+        </tr>`;
+    }).join('')}</tbody></table></div>`;
 
   if (!running) return;
   box.addEventListener('change', async (e) => {
     const cb = e.target.closest('[data-step]');
     if (!cb) return;
     const i = Number(cb.dataset.i);
-    if (cb.checked) {
+    if (cb.checked && t.steps.slice(0, i).some((s) => !s.done)) {
       // Trình tự thao tác phải đúng thứ tự: nhắc khi tích vượt bước.
-      const skipped = t.steps.slice(0, i).filter((s) => !s.done).map((_, k) => k);
-      if (skipped.length) {
-        const first = t.steps.findIndex((s) => !s.done) + 1;
-        const ok = await confirmDialog(`Bước ${first} trở đi chưa được tích. Thao tác phải theo đúng trình tự — vẫn đánh dấu bước ${i + 1} đã thực hiện?`, { title: 'Tích vượt bước' });
-        if (!ok) { cb.checked = false; return; }
-      }
+      const first = t.steps.findIndex((s) => !s.done) + 1;
+      const ok = await confirmDialog(`Bước ${first} trở đi chưa được tích. Thao tác phải theo đúng trình tự — vẫn đánh dấu bước ${i + 1} đã thực hiện?`, { title: 'Tích vượt bước' });
+      if (!ok) { cb.checked = false; return; }
     }
+    const payload = { done: cb.checked };
+    const cmd = qs('#cmd-by', box);
+    const rcv = qs('#rcv-by', box);
+    if (cmd) payload.commander = cmd.value;
+    if (rcv) payload.receiver = rcv.value;
     cb.disabled = true;
     try {
-      const updated = await api.put(`${API}/phieu/${t.id}/buoc/${cb.dataset.step}`, { done: cb.checked });
+      const updated = await api.put(`${API}/phieu/${t.id}/buoc/${cb.dataset.step}`, payload);
       if (updated.status !== t.status) {
         // Tích bước đầu tiên chuyển phiếu sang "Đang thực hiện": các nút thao
         // tác phía trên đổi theo, nên làm mới cả trang (vẫn giữ chỗ đang cuộn).
         onChange();
         return;
       }
-      // Chỉ cập nhật đúng dòng vừa tích và thanh tiến độ — không tải lại trang.
+      // Chỉ cập nhật đúng dòng vừa tích, giờ bắt đầu/kết thúc và thanh tiến độ.
       t.steps = updated.steps;
       const step = updated.steps[i];
       const row = cb.closest('tr');
       row.classList.toggle('done', Boolean(step.done));
-      row.querySelector('.text-muted').textContent = step.done_at ? step.done_at.slice(11, 16) : '';
+      row.querySelector('[data-cmd]').textContent = step.done ? shortName(step.commander) : '';
+      row.querySelector('[data-rcv]').textContent = step.done ? shortName(step.receiver) : '';
+      cb.title = step.done_at ? `Tích lúc ${step.done_at.slice(11, 16)}` : '';
+      const tm = stepTimes(updated.steps);
+      qs('#t-start', box).textContent = tm.start;
+      qs('#t-end', box).textContent = tm.end;
       const bar = document.getElementById('step-progress');
       if (bar) bar.innerHTML = progress({ n_steps: updated.steps.length, n_done: updated.steps.filter((x) => x.done).length });
       cb.disabled = false;
@@ -629,6 +670,61 @@ function renderChecklist(box, t, running, onChange) {
       cb.checked = !cb.checked;
       cb.disabled = false;
     }
+  });
+}
+
+// ------------------------------------------------------------ giao nhận, nghiệm thu
+
+function handoverRow(r = {}, editable = true) {
+  if (!editable) {
+    return `<tr><td>${esc(r.time)}</td><td>${esc(r.unit)}</td><td>${esc(r.name)}</td><td style="white-space:pre-wrap">${esc(r.content)}</td></tr>`;
+  }
+  return `<tr>
+    <td><input class="input" data-h="time" value="${esc(r.time || '')}" placeholder="HH:MM" style="padding:5px 8px"></td>
+    <td><input class="input" data-h="unit" value="${esc(r.unit || '')}" style="padding:5px 8px"></td>
+    <td><input class="input" data-h="name" value="${esc(r.name || '')}" list="dl-names" style="padding:5px 8px"></td>
+    <td><input class="input" data-h="content" value="${esc(r.content || '')}" style="padding:5px 8px"></td>
+    <td style="width:40px"><button class="btn btn-icon btn-sm" data-h-del type="button" title="Xoá dòng">${icon('trash', 14)}</button></td></tr>`;
+}
+
+function handoverCard(key, title, rows, editable) {
+  const list = rows || [];
+  return `
+    <section class="card" style="margin-bottom:16px" data-handover="${key}">
+      <div class="card-head"><h2 class="card-title" style="font-size:14.5px">${esc(title)}</h2>
+        ${editable ? `<div class="card-actions">
+          <button class="btn btn-sm" data-h-add type="button">${icon('plus', 14)}Thêm dòng</button>
+          <button class="btn btn-sm" data-h-save type="button">${icon('check', 14)}Ghi</button></div>` : ''}</div>
+      <div style="overflow-x:auto"><table class="table">
+        <thead><tr><th style="width:110px">Thời gian</th><th style="width:22%">Đơn vị</th><th style="width:22%">Họ tên</th><th>Nội dung</th>${editable ? '<th></th>' : ''}</tr></thead>
+        <tbody>${list.length ? list.map((r) => handoverRow(r, editable)).join('')
+          : editable ? '' : '<tr><td colspan="4" class="text-muted">Không có</td></tr>'}</tbody>
+      </table></div>
+      ${editable && !list.length ? '<p class="text-muted" data-h-empty style="margin:6px 0 0;font-size:12.5px">Chưa có. Bấm "Thêm dòng" nếu có giao nhận, nghiệm thu.</p>' : ''}
+    </section>`;
+}
+
+function bindHandover(root, id) {
+  qsa('[data-handover]', root).forEach((card) => {
+    const key = card.dataset.handover === 'before' ? 'handover_before' : 'handover_after';
+    const tbody = qs('tbody', card);
+    card.addEventListener('click', async (e) => {
+      if (e.target.closest('[data-h-add]')) {
+        tbody.insertAdjacentHTML('beforeend', handoverRow({}));
+        qs('[data-h-empty]', card)?.remove();
+        tbody.lastElementChild.querySelector('input').focus();
+      } else if (e.target.closest('[data-h-del]')) {
+        e.target.closest('tr').remove();
+      } else if (e.target.closest('[data-h-save]')) {
+        const rows = qsa('tr', tbody).map((tr) => Object.fromEntries(
+          qsa('[data-h]', tr).map((el) => [el.dataset.h, el.value.trim()]),
+        )).filter((r) => Object.values(r).some(Boolean));
+        try {
+          await api.put(`${API}/phieu/${id}`, { [key]: rows });
+          toast(`Đã ghi ${rows.length} dòng giao nhận, nghiệm thu`, 'success');
+        } catch (err) { toast(err.message, 'error'); }
+      }
+    });
   });
 }
 

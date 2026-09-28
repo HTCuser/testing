@@ -189,7 +189,7 @@ nhập trống, rồi đi qua các mốc:
 |---|---|
 | **Mới lập** | Sửa mọi nội dung và các bước |
 | **Đã duyệt** | Nội dung giữ nguyên; tích bước đầu tiên là tự tiếp nhận |
-| **Đang thực hiện** | Vận hành viên **tích từng bước** khi làm xong — ghi lại giờ tích; tích vượt bước thì hỏi lại |
+| **Đang thực hiện** | Vận hành viên **tích từng bước** khi làm xong — ghi giờ tích, người ra lệnh (người giám sát) và người nhận lệnh (người thao tác); tích vượt bước thì hỏi lại |
 | **Hoàn thành** / **Đã huỷ** | Chỉ xem, tải về |
 
 Trang chi tiết như NKVH: số phiếu, phân loại **Kế hoạch / Đột xuất**, đơn vị cấp phiếu, người
@@ -205,9 +205,11 @@ hay tách dãy số cho kế hoạch và đột xuất; đặt số tiếp theo 
 đánh lại. Số chỉ cấp lúc lưu phiếu, hai người lưu cùng lúc vẫn không trùng.
 
 **Tải Word** ra đúng tờ phiếu thao tác của nhà máy (mẫu dựng từ phiếu thật "Đưa MBA T2-TD92 vào
-làm việc", đã bỏ hết nội dung riêng): điền số phiếu, người, giờ, điều kiện đánh số, và dựng lại
-bảng trình tự theo đúng số bước — cột Mục và Địa điểm gộp dọc như phiếu giấy, bước đã thực hiện
-đánh dấu X kèm giờ. Muốn dùng mẫu in khác: vào **Cấu hình số phiếu** → *Thay mẫu in khác*, đặt
+làm việc", đã bỏ hết nội dung riêng): điền số phiếu, người, giờ, điều kiện đánh số, hai bảng
+giao nhận, nghiệm thu trước / sau thao tác, và dựng lại bảng trình tự theo đúng số bước — cột
+Mục và Địa điểm gộp dọc như phiếu giấy, bước đã thực hiện đánh dấu X kèm tên người ra lệnh,
+nhận lệnh. Như NKVH, cột thời gian chỉ ghi **giờ bắt đầu ở bước đầu tiên** (lúc tích bước đầu)
+và **giờ kết thúc ở bước cuối cùng** (lúc tích bước cuối, khi đã tích đủ). Muốn dùng mẫu in khác: vào **Cấu hình số phiếu** → *Thay mẫu in khác*, đặt
 các ô `{{Số phiếu}}`, `{{Người viết phiếu}}`… (danh sách đầy đủ trong hộp cấu hình); bảng trình
 tự là bảng có cột "Nội dung" và "Bước" hoặc "Mục".
 
