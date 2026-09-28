@@ -2,7 +2,7 @@ import { api } from '../api.js';
 import { icon } from '../icons.js';
 import { navigate } from '../router.js';
 import { isStale, setPage } from '../shell.js';
-import { createStepGrid } from '../stepgrid.js';
+import { createStepGrid, importListsInto } from '../stepgrid.js';
 import {
   confirmDialog, emptyState, errorState, esc, formatBytes, formatDateTime,
   loading, openModal, qs, qsa, toast,
@@ -313,7 +313,7 @@ function headerForm(t, hints, cfg, { locked, stamps = {} }) {
       <div class="field"><label>Đơn vị đề nghị thao tác</label><input class="input" name="requesting_unit" value="${esc(t.requesting_unit || '')}" list="dl-units"></div>
     </div>
     <div class="field-row">
-      <div class="field"><label>Điều kiện cần có để thực hiện <span class="hint">(mỗi dòng một điều kiện)</span></label>
+      <div class="field"><label>Điều kiện cần để thực hiện <span class="hint">(mỗi dòng một ý)</span></label>
         <textarea class="textarea" name="conditions" style="min-height:64px">${esc(t.conditions || '')}</textarea></div>
       <div class="field"><label>Lưu ý <span class="hint">(nếu có)</span></label>
         <textarea class="textarea" name="notes" style="min-height:64px">${esc(t.notes || '')}</textarea></div>
@@ -385,7 +385,10 @@ async function renderNew(root, ctx) {
     </section>
     <button class="btn btn-primary" id="create">${icon('check', 16)}Lưu và cấp số phiếu</button>`;
 
-  const grid = createStepGrid(qs('#grid', root), template?.steps || [], { locations: hints.locations });
+  const grid = createStepGrid(qs('#grid', root), template?.steps || [], {
+    locations: hints.locations,
+    onImport: (data, replace) => importListsInto(qs('#ptt-form', root), data, replace),
+  });
   const selGroup = qs('#n-group', root);
   const selTpl = qs('#n-tpl', root);
   async function fillTemplates() {
@@ -508,7 +511,10 @@ async function renderTicket(root, id, { keepScroll = false } = {}) {
   const stepsBox = qs('#steps', root);
   let grid = null;
   if (editable) {
-    grid = createStepGrid(stepsBox, t.steps, { locations: hints.locations });
+    grid = createStepGrid(stepsBox, t.steps, {
+      locations: hints.locations,
+      onImport: (data, replace) => importListsInto(qs('#ptt-form', root), data, replace),
+    });
   } else {
     renderChecklist(stepsBox, t, running, () => renderTicket(root, id, { keepScroll: true }));
   }

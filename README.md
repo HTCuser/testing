@@ -176,8 +176,13 @@ bước gồm **Mục, Địa điểm, Bước, Nội dung**:
 
 - Sửa trực tiếp trên bảng; **Thêm**, **Xoá** các dòng đã tích chọn; **⤒ ↑ ↓ ⤓** đưa dòng chọn lên
   đầu, lên, xuống, xuống cuối; **Ghi** để lưu.
-- **Import Excel**: file có các cột Mục, Địa điểm, Bước, Nội dung (tìm hàng tiêu đề trong 10 hàng
-  đầu; không có tiêu đề thì hiểu 4 cột đầu theo thứ tự đó).
+- **Import Excel**: file có các cột Mục, Địa điểm, Bước, Nội dung, và tuỳ chọn thêm hai cột
+  **Điều kiện cần để thực hiện**, **Lưu ý** (tìm hàng tiêu đề trong 10 hàng đầu; không có tiêu đề
+  thì hiểu các cột A–F theo thứ tự đó). Ở hai cột sau, mỗi ô có chữ là một điều kiện / một lưu ý,
+  không gắn với bước cùng hàng; số thứ tự gõ sẵn trong ô được bỏ, khi in phiếu tự đánh lại 1., 2.…
+  Có nút **Tải file Excel mẫu** ngay dưới bảng bước.
+- **Điều kiện cần để thực hiện** và **Lưu ý** của mẫu (mỗi dòng một ý) được chép sang phiếu lập từ
+  mẫu và in vào chỗ `{{Điều kiện}}`, `{{Lưu ý}}` của mẫu in.
 - Số bước tự đánh liên tục. Ghi Mục (I, II…) và Địa điểm ở bước mở đầu, các bước sau để trống
   là thuộc cùng mục, cùng địa điểm.
 - PTT mẫu được lập chỉ mục: hỏi trợ lý "trình tự đóng điện tủ điều khiển cửa van sự cố H2" là ra.

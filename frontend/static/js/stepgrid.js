@@ -6,7 +6,29 @@ import { confirmDialog, esc, qs, qsa, toast } from './ui.js';
 // Dùng chung cho PTT mẫu và phiếu đang soạn. Số bước tự đánh liên tục theo
 // thứ tự dòng — không để người nhập gõ tay rồi lệch số.
 
-export function createStepGrid(container, initial = [], { onChange = () => {}, locations = [] } = {}) {
+// Điều kiện / lưu ý đọc từ Excel: thay nội dung ô, hoặc nối thêm các dòng chưa có.
+export function mergeLines(current, incoming, replace) {
+  if (!incoming) return current;
+  if (replace || !current.trim()) return incoming;
+  const have = new Set(current.split('\n').map((l) => l.trim()));
+  const add = incoming.split('\n').filter((l) => !have.has(l.trim()));
+  return add.length ? `${current.replace(/\s+$/, '')}\n${add.join('\n')}` : current;
+}
+
+// Điền điều kiện, lưu ý đọc từ Excel vào ô conditions/notes của form.
+export function importListsInto(form, data, replace) {
+  const parts = [];
+  [['conditions', 'điều kiện'], ['notes', 'lưu ý']].forEach(([name, label]) => {
+    const el = form?.elements[name];
+    if (!el || !data[name]) return;
+    el.value = mergeLines(el.value, data[name], replace);
+    parts.push(`${data[name].split('\n').length} ${label}`);
+  });
+  if (parts.length) form.dispatchEvent(new Event('input', { bubbles: true }));
+  return parts.length ? `, ${parts.join(', ')}` : '';
+}
+
+export function createStepGrid(container, initial = [], { onChange = () => {}, onImport = null, locations = [] } = {}) {
   let steps = initial.map((s) => ({ section: s.section || '', location: s.location || '', content: s.content || '' }));
   let dirty = false;
 
@@ -36,7 +58,9 @@ export function createStepGrid(container, initial = [], { onChange = () => {}, l
     </div>
     <p class="text-muted" style="font-size:12.5px;margin:8px 0 0;line-height:1.6">
       Ghi <b>Mục</b> (I, II…) và <b>Địa điểm</b> ở bước mở đầu; các bước sau để trống là thuộc cùng mục, cùng địa điểm.
-      Số bước tự đánh liên tục. Excel cần các cột Mục, Địa điểm, Bước, Nội dung.</p>`;
+      Số bước tự đánh liên tục. Excel cần các cột Mục, Địa điểm, Bước, Nội dung;
+      thêm cột <b>Điều kiện cần để thực hiện</b> và <b>Lưu ý</b> nếu có (mỗi ô một ý).
+      <a href="/api/ptt/nhap-excel/mau" download>Tải file Excel mẫu</a>.</p>`;
 
   const tbody = qs('tbody', container);
 
@@ -136,7 +160,8 @@ export function createStepGrid(container, initial = [], { onChange = () => {}, l
       steps = replace ? data.steps : [...steps, ...data.steps];
       render();
       changed();
-      toast(`Đã đọc ${data.total} bước từ Excel. Bấm "Ghi" để lưu.`, 'success');
+      const extra = onImport ? onImport(data, replace) : '';
+      toast(`Đã đọc ${data.total} bước${extra || ''} từ Excel. Bấm "Ghi" để lưu.`, 'success');
     } catch (err) { toast(err.message, 'error', 8000); }
   });
 

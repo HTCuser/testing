@@ -1,7 +1,7 @@
 import { api } from '../api.js';
 import { icon } from '../icons.js';
 import { isStale, setPage } from '../shell.js';
-import { createStepGrid } from '../stepgrid.js';
+import { createStepGrid, importListsInto } from '../stepgrid.js';
 import { confirmDialog, errorState, esc, loading, openModal, qs, toast } from '../ui.js';
 
 // Phiếu thao tác mẫu, bố cục như NKVH điện tử: Nhóm | Tên phiếu | bảng bước.
@@ -257,21 +257,21 @@ export async function render(root, ctx) {
           <div class="field"><label>Tên phiếu</label><input class="input" name="name" value="${esc(t.name)}" required></div>
           <div class="field"><label>Mục đích</label><input class="input" name="purpose" value="${esc(t.purpose)}"></div>
         </div>
-        <details ${t.conditions || t.notes ? 'open' : ''} style="margin-bottom:12px">
-          <summary style="cursor:pointer;font-weight:600;font-size:13px;color:var(--ink-soft)">Điều kiện thực hiện, lưu ý</summary>
-          <div class="field-row" style="margin-top:10px">
-            <div class="field"><label>Điều kiện cần có <span class="hint">(mỗi dòng một điều kiện)</span></label>
-              <textarea class="textarea" name="conditions" style="min-height:70px">${esc(t.conditions)}</textarea></div>
-            <div class="field"><label>Lưu ý <span class="hint">(mỗi dòng một ý)</span></label>
-              <textarea class="textarea" name="notes" style="min-height:70px">${esc(t.notes)}</textarea></div>
-          </div>
-        </details>
+        <div class="field-row">
+          <div class="field"><label>Điều kiện cần để thực hiện <span class="hint">(mỗi dòng một ý)</span></label>
+            <textarea class="textarea" name="conditions" style="min-height:80px">${esc(t.conditions)}</textarea></div>
+          <div class="field"><label>Lưu ý <span class="hint">(mỗi dòng một ý)</span></label>
+            <textarea class="textarea" name="notes" style="min-height:80px">${esc(t.notes)}</textarea></div>
+        </div>
       </form>
       <div id="grid"></div>`;
     const badge = qs('#unsaved', editor);
     const markDirty = () => { badge.hidden = false; };
     qs('#tpl-form', editor).addEventListener('input', () => { state.fieldsDirty = true; markDirty(); });
-    state.grid = createStepGrid(qs('#grid', editor), t.steps, { onChange: markDirty, locations: hints.locations });
+    state.grid = createStepGrid(qs('#grid', editor), t.steps, {
+      onChange: markDirty, locations: hints.locations,
+      onImport: (data, replace) => importListsInto(qs('#tpl-form', editor), data, replace),
+    });
     qs('#save', editor).addEventListener('click', async () => {
       const form = qs('#tpl-form', editor);
       if (!form.reportValidity()) return;

@@ -274,14 +274,34 @@ def copy_template(template_id: int) -> dict:
 
 _COLS = {"muc": "section", "dia diem": "location", "noi dung": "content",
          "noi dung thao tac": "content", "buoc": "no", "stt": "no"}
+# Hai cột không gắn với bước nào: mỗi ô có chữ là một điều kiện / một lưu ý.
+_LIST_COLS = (("dieu kien", "conditions"), ("luu y", "notes"), ("chu y", "notes"))
+
+
+def _col_key(value: str) -> str | None:
+    key = re.sub(r"\s+", " ", normalize(value)).strip().rstrip(":").strip()
+    key = re.sub(r"\s*\(.*\)$", "", key)  # "Lưu ý (nếu có)"
+    if key in _COLS:
+        return _COLS[key]
+    for prefix, field in _LIST_COLS:
+        if key.startswith(prefix):
+            return field
+    return None
+
+
+def _list_item(text: str) -> str:
+    """Bỏ số thứ tự / gạch đầu dòng gõ sẵn trong ô; khi in phiếu sẽ tự đánh lại."""
+    return re.sub(r"^\s*(?:\d{1,2}\s*[.)/-]|[-+•*–])\s*", "", text).strip()
 
 
 @router.post("/nhap-excel")
 async def import_excel(file: UploadFile = File(...)) -> dict:
-    """Đọc bảng bước từ Excel (cột Mục, Địa điểm, Bước, Nội dung), chưa ghi gì.
+    """Đọc bảng bước từ Excel, chưa ghi gì.
 
-    Tìm hàng tiêu đề trong 10 hàng đầu; không có tiêu đề thì hiểu 4 cột đầu
-    theo thứ tự Mục, Địa điểm, Bước, Nội dung như bảng trên NKVH.
+    Cột bước: Mục, Địa điểm, Bước, Nội dung. Thêm hai cột tuỳ chọn
+    "Điều kiện cần để thực hiện" và "Lưu ý": mỗi ô có chữ là một dòng,
+    không gắn với bước cùng hàng. Tìm hàng tiêu đề trong 10 hàng đầu; không
+    có tiêu đề thì hiểu các cột theo thứ tự A–F như trên.
     """
     if Path(file.filename or "").suffix.lower() not in (".xlsx", ".xlsm"):
         raise HTTPException(400, "Cần file Excel .xlsx (file .xls đời cũ: mở bằng Excel rồi lưu thành .xlsx)")
@@ -298,25 +318,59 @@ async def import_excel(file: UploadFile = File(...)) -> dict:
 
     mapping, start = {}, 0
     for i, row in enumerate(rows[:10]):
-        found = {j: _COLS[normalize(v).strip().rstrip(":")] for j, v in enumerate(row)
-                 if normalize(v).strip().rstrip(":") in _COLS}
+        found = {j: k for j, v in enumerate(row) if v and (k := _col_key(v))}
         if "content" in found.values():
             mapping, start = found, i + 1
             break
     if not mapping:
-        mapping = {0: "section", 1: "location", 2: "no", 3: "content"}
+        mapping = {0: "section", 1: "location", 2: "no", 3: "content", 4: "conditions", 5: "notes"}
 
-    steps = []
+    steps: list[dict] = []
+    lists: dict[str, list[str]] = {"conditions": [], "notes": []}
     for row in rows[start:]:
         step = {"section": "", "location": "", "content": ""}
         for j, key in mapping.items():
-            if key != "no" and j < len(row):
+            if j >= len(row) or key == "no":
+                continue
+            if key in lists:
+                for line in row[j].splitlines():
+                    item = _list_item(line)
+                    if item and item not in lists[key]:
+                        lists[key].append(item)
+            else:
                 step[key] = row[j]
         if step["content"]:
             steps.append(step)
-    if not steps:
+    if not steps and not any(lists.values()):
         raise HTTPException(400, "Không tìm thấy bước nào. Cần một cột tiêu đề là \"Nội dung\".")
-    return {"steps": steps, "total": len(steps)}
+    return {"steps": steps, "total": len(steps),
+            "conditions": "\n".join(lists["conditions"]), "notes": "\n".join(lists["notes"])}
+
+
+@router.get("/nhap-excel/mau")
+def excel_sample() -> Response:
+    """File Excel trống đúng các cột để VHV điền rồi Import."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Phieu mau"
+    heads = ["Mục", "Địa điểm", "Bước", "Nội dung", "Điều kiện cần để thực hiện", "Lưu ý"]
+    ws.append(heads)
+    ws.append(["I", "Phòng điều khiển trung tâm", 1, "Kiểm tra ...", "Điều kiện 1 (mỗi ô một điều kiện)", "Lưu ý 1 (mỗi ô một ý)"])
+    ws.append(["", "", 2, "Cắt ...", "Điều kiện 2", ""])
+    for col, width in zip("ABCDEF", (8, 26, 8, 60, 40, 40)):
+        ws.column_dimensions[col].width = width
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+    for row in ws.iter_rows():
+        for cell in row:
+            cell.alignment = Alignment(wrap_text=True, vertical="top")
+    buf = io.BytesIO()
+    wb.save(buf)
+    return Response(buf.getvalue(), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": 'attachment; filename="phieu-thao-tac-mau.xlsx"'})
 
 
 # ======================================================================= số phiếu
@@ -830,7 +884,8 @@ def _numbered(text: str) -> str:
     lines = [ln.strip() for ln in (text or "").splitlines() if ln.strip()]
     if not lines or all(re.match(r"^\d+\s*[.)]", ln) for ln in lines):
         return "\n".join(lines)
-    return "\n".join(f"{i}. {ln}" for i, ln in enumerate(lines, start=1))
+    items = [_list_item(ln) or ln for ln in lines]
+    return "\n".join(f"{i}. {ln}" for i, ln in enumerate(items, start=1))
 
 
 def _time_parts(value: str) -> dict:
