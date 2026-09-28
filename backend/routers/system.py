@@ -104,6 +104,13 @@ def stats() -> dict:
     }
 
 
+@router.get("/thong-tin")
+def basic_info() -> dict:
+    """Tên nhà máy cho khung giao diện. Không gọi dịch vụ ngoài, để trang mở
+    ngay cả khi Ollama đang nạp mô hình hay không trả lời."""
+    return {"plant_name": config.PLANT_NAME, "org_name": config.ORG_NAME, "org_unit": config.ORG_UNIT}
+
+
 @router.get("/config")
 def runtime_config() -> dict:
     index.ensure_ready()

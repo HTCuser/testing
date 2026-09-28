@@ -121,20 +121,25 @@ setNavigationHook(async (location, found) => {
 });
 
 async function boot() {
-  // Các module đã nạp đủ — báo cho đoạn kiểm tra trong index.html.
-  window.__appStarted = true;
-  try { sessionStorage.removeItem('huana-boot-retry'); } catch { /* không có sessionStorage */ }
   let plantName = 'Nhà máy Thủy điện Hủa Na';
   try {
-    const cfg = await api.config();
-    plantName = cfg.plant_name;
-    setOrg(cfg.org_name, cfg.org_unit);
+    // Chỉ cần tên nhà máy để dựng khung; chờ tối đa 4 giây, máy chủ chậm thì
+    // vẫn mở giao diện, từng trang tự báo lỗi của nó.
+    const info = await Promise.race([
+      api.info(),
+      new Promise((_, reject) => { setTimeout(() => reject(new Error('timeout')), 4000); }),
+    ]);
+    plantName = info.plant_name;
+    setOrg(info.org_name, info.org_unit);
   } catch {
     // Máy chủ chưa sẵn sàng: vẫn dựng khung để hiển thị lỗi ở từng trang.
   }
 
   buildShell(document.getElementById('root'), plantName);
   setFooter('Hệ thống tra cứu tài liệu kỹ thuật, quy trình vận hành và xử lý sự cố');
+  // Giao diện đã dựng xong — báo cho đoạn kiểm tra trong index.html.
+  window.__appStarted = true;
+  try { sessionStorage.removeItem('huana-boot-retry'); } catch { /* không có sessionStorage */ }
   start();
 }
 

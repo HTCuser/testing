@@ -1,6 +1,7 @@
 """Điểm khởi động ứng dụng: trợ lý kỹ thuật Nhà máy Thủy điện Hủa Na."""
 from __future__ import annotations
 
+import mimetypes
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -11,6 +12,12 @@ from . import config
 from .db import init_db
 from .rag.index import index
 from .routers import chat, documents, equipment, forms, incidents, procedures, system, journal, ptt
+
+
+# Windows lấy kiểu file từ Registry; có máy ghi .js là "text/plain" (do phần mềm
+# khác cài đè) và trình duyệt từ chối chạy module JS -> trang không khởi động.
+mimetypes.add_type("text/javascript", ".js")
+mimetypes.add_type("text/css", ".css")
 
 
 @asynccontextmanager

@@ -52,6 +52,7 @@ export const api = {
 
   stats: () => request('GET', '/api/stats'),
   config: () => request('GET', '/api/config'),
+  info: () => request('GET', '/api/thong-tin'),
   reindexAll: () => request('POST', '/api/reindex'),
 
   ask: (payload) => request('POST', '/api/ask', { json: payload }),

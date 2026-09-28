@@ -21,10 +21,33 @@
   <script>
     // Sau khi cập nhật phần mềm, trình duyệt có thể còn giữ vài file giao diện cũ:
     // trang đứng mãi ở "Đang khởi động". Khi đó tự nạp lại toàn bộ file một lần;
-    // vẫn không được thì hướng dẫn người dùng.
+    // vẫn không được thì hiện lỗi ngay trên trang để chụp gửi hỗ trợ.
     (function () {
       var KEY = 'huana-boot-retry';
       var handled = false;
+      var errors = [];
+      function remember(msg) { if (msg && errors.indexOf(msg) < 0) errors.push(String(msg)); }
+      window.addEventListener('error', function (e) {
+        var src = e.target && e.target !== window && (e.target.src || e.target.href);
+        remember(src ? 'Không tải được ' + src : e.message);
+        if (!window.__appStarted) setTimeout(stuck, 300);
+      }, true);
+      window.addEventListener('unhandledrejection', function (e) {
+        remember(e.reason && (e.reason.message || e.reason));
+      });
+      function esc(t) { return String(t).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
+      function show(serverOk) {
+        var box = document.querySelector('#root > div > div');
+        if (!box) return;
+        box.style.maxWidth = '640px';
+        box.innerHTML = '<p style="font-size:17px;color:#b42318;font-weight:600">Không mở được giao diện</p>'
+          + '<p style="margin-top:10px">' + (serverOk
+            ? 'Máy chủ vẫn trả lời. Bấm <b>Ctrl + F5</b> để tải lại.'
+            : 'Máy chủ không trả lời: xem cửa sổ <b>run.bat</b> còn chạy không, có báo lỗi gì không.') + '</p>'
+          + (errors.length ? '<pre style="text-align:left;white-space:pre-wrap;margin-top:12px;padding:10px;background:#f4f6f8;color:#333;font-size:12.5px;border-radius:6px">'
+            + esc(errors.slice(0, 5).join('\n')) + '</pre>' : '')
+          + '<p style="margin-top:10px;font-size:13px">Vẫn không được thì chụp màn hình này gửi hỗ trợ.</p>';
+      }
       function stuck() {
         if (handled || window.__appStarted) return;
         handled = true;
@@ -37,15 +60,10 @@
             .then(function () { location.reload(); });
           return;
         }
-        var p = document.querySelector('#root p');
-        if (p) {
-          p.innerHTML = 'Không nạp được giao diện.<br>Bấm <b>Ctrl + F5</b> để tải lại. Nếu vẫn vậy, kiểm tra cửa sổ run.bat còn chạy không.';
-        }
-        var s = document.querySelector('#root .spinner');
-        if (s) s.style.display = 'none';
+        try { sessionStorage.removeItem(KEY); } catch (e) { /* bỏ qua */ }
+        fetch('/healthz', { cache: 'no-store' }).then(function (r) { show(r.ok); }, function () { show(false); });
       }
-      window.addEventListener('error', function () { setTimeout(stuck, 300); });
-      setTimeout(stuck, 5000);
+      setTimeout(stuck, 8000);
     })();
   </script>
   <script type="module" src="/static/js/app.js"></script>
