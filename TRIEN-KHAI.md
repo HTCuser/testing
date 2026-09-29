@@ -15,6 +15,7 @@ Tài liệu này dành cho người cài đặt và quản trị phần mềm. �
 | Sao lưu ngay / khôi phục từ bản sao lưu | `sao-luu.bat` / `khoi-phuc.bat` |
 | Quên mật khẩu (kể cả quản trị) | `tai-khoan.bat` (chạy trên máy chủ) |
 | Gỡ chế độ máy chủ | `go-cai-dat-may-chu.bat` |
+| Chuyển cả thư mục tài liệu sang PDF, tên không dấu (file gốc giữ nguyên) | `chuyen-pdf-khong-dau.bat` — kéo thả thư mục vào file |
 
 Các file `.bat` tự xin quyền Administrator khi cần. Gặp hộp thoại hỏi quyền thì bấm **Yes**.
 
