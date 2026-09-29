@@ -197,7 +197,6 @@ async def upload_document(
     uploaded_by: str = Form(""),
     doc_code: str = Form(""),
     decision_no: str = Form(""),
-    effective_date: str = Form(""),
 ) -> dict:
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in ALLOWED_EXTENSIONS:
@@ -217,15 +216,14 @@ async def upload_document(
     document_id = execute(
         """INSERT INTO documents (title, filename, stored_name, mime, size_bytes, category,
                                   equipment_id, tags, version, issued_date, uploaded_by,
-                                  description, doc_code, decision_no, effective_date,
-                                  source_kind, index_status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'tep', 'dang_xu_ly')""",
+                                  description, doc_code, decision_no, source_kind, index_status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'tep', 'dang_xu_ly')""",
         (
             title.strip() or Path(file.filename or stored_name).stem,
             file.filename or stored_name, stored_name, file.content_type or "",
             len(payload), category, eq_id, tags, version, issued_date,
             uploaded_by or auth.display_name(), description,
-            doc_code.strip(), decision_no.strip(), effective_date.strip(),
+            doc_code.strip(), decision_no.strip(),
         ),
     )
 
@@ -250,8 +248,7 @@ async def upload_document(
 
 # ------------------------------------------------------------------ thông tin ban hành
 
-_ISSUANCE_LABELS = {"doc_code": "mã hiệu", "decision_no": "số quyết định",
-                    "issued_date": "ngày ban hành", "effective_date": "ngày hiệu lực"}
+_ISSUANCE_LABELS = {"doc_code": "mã hiệu", "decision_no": "số quyết định", "issued_date": "ngày ban hành"}
 
 
 def _iso(day: str, month: str, year: str) -> str:
@@ -263,7 +260,7 @@ def _iso(day: str, month: str, year: str) -> str:
 
 
 def detect_issuance(text: str) -> dict:
-    """Đọc mã hiệu, số quyết định, ngày ban hành, ngày hiệu lực ở trang bìa quy trình.
+    """Đọc mã hiệu, số quyết định, ngày ban hành ở trang bìa quy trình.
 
     Trang bìa quy trình của nhà máy ghi theo mẫu:
         MÃ HIỆU: HHC-VH-QT-20      NGÀY HIỆU LỰC: 11/3/2025
@@ -289,8 +286,10 @@ def detect_issuance(text: str) -> dict:
             found["issued_date"] = _iso(*d.groups())
     m = re.search(r"HIEU\s+LUC\s*[:：]?\s*(?:(?:tu|ke\s+tu)\s+ngay\s*)?(\d{1,2})\s*[/.\-]\s*(\d{1,2})\s*[/.\-]\s*(\d{4})",
                   plain, re.I)
-    if m and _iso(*m.groups()):
-        found["effective_date"] = _iso(*m.groups())
+    if m and _iso(*m.groups()) and "issued_date" not in found:
+        # Ngày trong dòng quyết định viết tay trên bản scan hay đọc sai; khi đó
+        # lấy ngày hiệu lực in trên bìa (thường trùng ngày ban hành).
+        found["issued_date"] = _iso(*m.groups())
     return found
 
 

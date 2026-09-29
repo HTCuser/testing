@@ -179,7 +179,7 @@ function docRow(item, base) {
         <div class="row-meta">
           ${item.doc_code ? `<span class="badge badge-blue mono">${esc(item.doc_code)}</span>` : ''}
           ${item.decision_no ? `<span>QĐ ${esc(item.decision_no)}</span>` : ''}
-          ${item.effective_date ? `<span>Hiệu lực ${esc(viDate(item.effective_date))}</span>` : ''}
+          ${item.issued_date ? `<span>Ban hành ${esc(viDate(item.issued_date))}</span>` : ''}
           <span class="badge badge-grey">${esc(item.category_label)}</span>
           ${item.equipment_name ? `<span>${icon('equipment', 13)} ${esc(item.equipment_name)}</span>` : ''}
           ${isFile && item.size_bytes ? `<span>${esc(formatBytes(item.size_bytes))}</span>` : ''}
@@ -223,10 +223,6 @@ function infoFields(doc, categories, equipment) {
       <div class="field">
         <label>Ngày ban hành</label>
         <input class="input" type="date" name="issued_date" value="${v('issued_date')}">
-      </div>
-      <div class="field">
-        <label>Ngày hiệu lực</label>
-        <input class="input" type="date" name="effective_date" value="${v('effective_date')}">
       </div>
       <div class="field">
         <label>Lần ban hành / phiên bản</label>
@@ -275,7 +271,7 @@ function openUpload(categories, equipment, onDone, preset) {
         ${infoFields({ category: preset }, categories, equipment)}
         <div class="callout callout-info">
           Hệ thống tự đọc nội dung để tra cứu được ngay; tệp gốc vẫn giữ nguyên để mở ra đọc. Mã hiệu, số quyết định,
-          ngày ban hành, ngày hiệu lực để trống thì phần mềm tự đọc từ trang bìa quy trình (nếu có).
+          ngày ban hành để trống thì phần mềm tự đọc từ trang bìa quy trình (nếu có).
           PDF bản scan cần OCR trước khi tải lên.
         </div>
       </form>`,
@@ -405,7 +401,6 @@ async function renderDetail(root, id) {
           ${doc.doc_code ? `<dt>Mã hiệu</dt><dd class="mono" style="font-weight:700">${esc(doc.doc_code)}</dd>` : ''}
           ${doc.decision_no ? `<dt>Quyết định ban hành</dt><dd>Số ${esc(doc.decision_no)}</dd>` : ''}
           ${doc.issued_date ? `<dt>Ngày ban hành</dt><dd>${esc(viDate(doc.issued_date))}</dd>` : ''}
-          ${doc.effective_date ? `<dt>Ngày hiệu lực</dt><dd>${esc(viDate(doc.effective_date))}</dd>` : ''}
           ${doc.version ? `<dt>Lần ban hành</dt><dd>${esc(doc.version)}</dd>` : ''}
           ${isFile && can('tai_lieu') && !(doc.doc_code && doc.decision_no) ? `<dt></dt><dd><a href="javascript:void(0)" id="edit-info-2" style="font-size:13px">+ Bổ sung mã hiệu, số quyết định…</a></dd>` : ''}
           <dt>Phân loại</dt><dd>${esc(doc.category_label)}</dd>

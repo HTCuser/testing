@@ -238,10 +238,10 @@ Hoàn thành. Phần mềm ghi lại thời điểm, chưa ghi được *ai* b�
 
 ### Thông tin ban hành của quy trình
 
-Mỗi tài liệu có **Mã hiệu**, **Số quyết định ban hành**, **Ngày ban hành**, **Ngày hiệu lực**,
-lần ban hành. Để trống lúc tải lên thì phần mềm tự đọc từ trang bìa (dòng "MÃ HIỆU: ...",
-"NGÀY HIỆU LỰC: ...", "Quyết định số: 86/QĐ-HHC ngày ... tháng ... năm ...") và báo đã điền ô
-nào. Nút **Sửa thông tin** trên trang chi tiết sửa được mọi thông tin (kể cả chuyển phân loại);
+Mỗi tài liệu có **Mã hiệu**, **Số quyết định ban hành**, **Ngày ban hành**, lần ban hành. Để
+trống lúc tải lên thì phần mềm tự đọc từ trang bìa (dòng "MÃ HIỆU: ...", "Quyết định số:
+86/QĐ-HHC ngày ... tháng ... năm ..."; không đọc được ngày trong dòng quyết định thì lấy
+"NGÀY HIỆU LỰC" in trên bìa) và báo đã điền ô nào. Nút **Sửa thông tin** trên trang chi tiết sửa được mọi thông tin (kể cả chuyển phân loại);
 **Thay tệp** thay bằng bản sửa đổi mà giữ nguyên thông tin; **Nạp lại** đọc lại tệp và điền
 các ô còn trống. Tìm theo mã hiệu hoặc số quyết định ngay ở ô tìm kiếm thư viện; trích dẫn
 của trợ lý ghi kèm mã hiệu.

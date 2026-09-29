@@ -101,7 +101,6 @@ class DocumentUpdate(BaseModel):
     description: str | None = None
     doc_code: str | None = None        # mã hiệu, VD HHC-VH-QT-20
     decision_no: str | None = None     # số quyết định ban hành, VD 86/QĐ-HHC
-    effective_date: str | None = None
 
 
 class AskIn(BaseModel):
