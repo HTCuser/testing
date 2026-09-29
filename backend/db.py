@@ -402,6 +402,12 @@ def _migrate_ptt(conn: sqlite3.Connection) -> None:
         "cancelled_by": "TEXT NOT NULL DEFAULT ''",
     })
     _add_columns(conn, "ptt_ticket_steps", {"done_by": "TEXT NOT NULL DEFAULT ''"})
+    # Thông tin ban hành của quy trình, tài liệu: mã hiệu, số quyết định, ngày hiệu lực.
+    _add_columns(conn, "documents", {
+        "doc_code": "TEXT NOT NULL DEFAULT ''",
+        "decision_no": "TEXT NOT NULL DEFAULT ''",
+        "effective_date": "TEXT NOT NULL DEFAULT ''",
+    })
     _add_columns(conn, "journal", {
         "created_by_id": "INTEGER",
         "created_by": "TEXT NOT NULL DEFAULT ''",

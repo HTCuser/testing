@@ -236,6 +236,16 @@ tự là bảng có cột "Nội dung" và "Bước" hoặc "Mục".
 Chưa có chữ ký số và đăng nhập theo người dùng: ai mở phần mềm cũng bấm được Duyệt, Tiếp nhận,
 Hoàn thành. Phần mềm ghi lại thời điểm, chưa ghi được *ai* bấm.
 
+### Thông tin ban hành của quy trình
+
+Mỗi tài liệu có **Mã hiệu**, **Số quyết định ban hành**, **Ngày ban hành**, **Ngày hiệu lực**,
+lần ban hành. Để trống lúc tải lên thì phần mềm tự đọc từ trang bìa (dòng "MÃ HIỆU: ...",
+"NGÀY HIỆU LỰC: ...", "Quyết định số: 86/QĐ-HHC ngày ... tháng ... năm ...") và báo đã điền ô
+nào. Nút **Sửa thông tin** trên trang chi tiết sửa được mọi thông tin (kể cả chuyển phân loại);
+**Thay tệp** thay bằng bản sửa đổi mà giữ nguyên thông tin; **Nạp lại** đọc lại tệp và điền
+các ô còn trống. Tìm theo mã hiệu hoặc số quyết định ngay ở ô tìm kiếm thư viện; trích dẫn
+của trợ lý ghi kèm mã hiệu.
+
 ### Đọc tài liệu ngay trên trình duyệt
 
 Trong trang chi tiết mỗi tài liệu, nút **MỞ TÀI LIỆU** hiển thị nguyên văn tài liệu ngay trên

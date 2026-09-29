@@ -72,7 +72,7 @@ class HybridIndex:
         rows = query(
             """
             SELECT c.id, c.document_id, c.page, c.heading, c.text,
-                   d.title, d.category, d.source_kind, d.source_id, d.equipment_id,
+                   d.title, d.doc_code, d.category, d.source_kind, d.source_id, d.equipment_id,
                    COALESCE(e.name, '') AS equipment_name
               FROM chunks c
               JOIN documents d ON d.id = c.document_id
@@ -92,7 +92,7 @@ class HybridIndex:
             # Thêm mọi tên gọi của các mã bảo vệ đoạn này nhắc tới, để hỏi theo
             # tên nào cũng tìm được.
             aliases = glossary.expand_document(row["text"], table)
-            indexable = f"{row['title']}\n{row['equipment_name']}\n{row['heading']}\n{row['text']}"
+            indexable = f"{row['title']} {row['doc_code']}\n{row['equipment_name']}\n{row['heading']}\n{row['text']}"
             tokens = tokenize(indexable)
             entry = _Entry(chunk_id=row["id"], document_id=row["document_id"])
             # Chỉ lấy từ ghép (bigram) của tên gọi: đó mới là phần phân biệt chức
@@ -107,7 +107,11 @@ class HybridIndex:
             entries.append(entry)
             for term in entry.tf:
                 df[term] += 1
-            meta[row["id"]] = dict(row)
+            info = dict(row)
+            if info["doc_code"]:
+                # Trích dẫn kèm mã hiệu để người đọc (và mô hình) gọi đúng quy trình.
+                info["title"] = f"{info['title']} ({info['doc_code']})"
+            meta[row["id"]] = info
 
         with self._lock:
             self._entries = entries

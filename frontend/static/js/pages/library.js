@@ -177,6 +177,9 @@ function docRow(item, base) {
       <div class="row-body">
         <div class="row-title">${esc(item.title)}</div>
         <div class="row-meta">
+          ${item.doc_code ? `<span class="badge badge-blue mono">${esc(item.doc_code)}</span>` : ''}
+          ${item.decision_no ? `<span>QĐ ${esc(item.decision_no)}</span>` : ''}
+          ${item.effective_date ? `<span>Hiệu lực ${esc(viDate(item.effective_date))}</span>` : ''}
           <span class="badge badge-grey">${esc(item.category_label)}</span>
           ${item.equipment_name ? `<span>${icon('equipment', 13)} ${esc(item.equipment_name)}</span>` : ''}
           ${isFile && item.size_bytes ? `<span>${esc(formatBytes(item.size_bytes))}</span>` : ''}
@@ -192,6 +195,73 @@ function docRow(item, base) {
     </a>`;
 }
 
+function viDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : (iso || '');
+}
+
+// Các ô thông tin tài liệu, dùng chung cho hộp thoại tải lên và sửa thông tin.
+function infoFields(doc, categories, equipment) {
+  const v = (k) => esc(doc[k] || '');
+  return `
+    <div class="field">
+      <label>Tên tài liệu${doc.id ? '' : ' <span class="hint">(để trống sẽ lấy theo tên tệp)</span>'}</label>
+      <input class="input" name="title" value="${v('title')}" ${doc.id ? 'required' : ''}
+             placeholder="VD: Quy trình vận hành và xử lý sự cố hệ thống báo cháy, báo khói">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Mã hiệu</label>
+        <input class="input mono" name="doc_code" value="${v('doc_code')}" placeholder="VD: HHC-VH-QT-20">
+      </div>
+      <div class="field">
+        <label>Số quyết định ban hành</label>
+        <input class="input" name="decision_no" value="${v('decision_no')}" placeholder="VD: 86/QĐ-HHC">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Ngày ban hành</label>
+        <input class="input" type="date" name="issued_date" value="${v('issued_date')}">
+      </div>
+      <div class="field">
+        <label>Ngày hiệu lực</label>
+        <input class="input" type="date" name="effective_date" value="${v('effective_date')}">
+      </div>
+      <div class="field">
+        <label>Lần ban hành / phiên bản</label>
+        <input class="input" name="version" value="${v('version')}" placeholder="VD: Lần 2">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Phân loại</label>
+        <select class="select" name="category">
+          ${categories.items.map((c) => `<option value="${c.value}" ${c.value === doc.category ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label>Thiết bị liên quan</label>
+        <select class="select" name="equipment_id">
+          <option value="">— Không gắn thiết bị —</option>
+          ${equipment.items.map((e) => `<option value="${e.id}" ${e.id === doc.equipment_id ? 'selected' : ''}>${esc(e.code)} — ${esc(e.name)}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Thẻ <span class="hint">(cách nhau bằng dấu phẩy)</span></label>
+      <input class="input" name="tags" value="${v('tags')}" placeholder="báo cháy, báo khói, PCCC">
+    </div>
+    <div class="field">
+      <label>Mô tả ngắn</label>
+      <textarea class="textarea" name="description" style="min-height:60px">${v('description')}</textarea>
+    </div>`;
+}
+
+function autoFilledNote(result) {
+  return result.auto_filled?.length ? ` Đã tự đọc từ tệp: ${result.auto_filled.join(', ')} — kiểm tra lại ở "Sửa thông tin".` : '';
+}
+
 function openUpload(categories, equipment, onDone, preset) {
   openModal({
     title: 'Tải tài liệu vào thư viện kỹ thuật',
@@ -202,45 +272,11 @@ function openUpload(categories, equipment, onDone, preset) {
           <input class="input" type="file" name="file" required
                  accept=".pdf,.docx,.txt,.md,.xlsx,.csv">
         </div>
-        <div class="field">
-          <label>Tên tài liệu <span class="hint">(để trống sẽ lấy theo tên tệp)</span></label>
-          <input class="input" name="title" placeholder="VD: Hướng dẫn vận hành hệ thống kích từ">
-        </div>
-        <div class="field-row">
-          <div class="field">
-            <label>Phân loại</label>
-            <select class="select" name="category">
-              ${categories.items.map((c) => `<option value="${c.value}" ${c.value === preset ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}
-            </select>
-          </div>
-          <div class="field">
-            <label>Thiết bị liên quan</label>
-            <select class="select" name="equipment_id">
-              <option value="">— Không gắn thiết bị —</option>
-              ${equipment.items.map((e) => `<option value="${e.id}">${esc(e.code)} — ${esc(e.name)}</option>`).join('')}
-            </select>
-          </div>
-        </div>
-        <div class="field-row">
-          <div class="field">
-            <label>Phiên bản</label>
-            <input class="input" name="version" placeholder="VD: Rev.03">
-          </div>
-          <div class="field">
-            <label>Ngày ban hành</label>
-            <input class="input" type="date" name="issued_date">
-          </div>
-        </div>
-        <div class="field">
-          <label>Thẻ <span class="hint">(cách nhau bằng dấu phẩy)</span></label>
-          <input class="input" name="tags" placeholder="tuabin, điều tốc, dầu áp lực">
-        </div>
-        <div class="field">
-          <label>Mô tả ngắn</label>
-          <textarea class="textarea" name="description" style="min-height:60px"></textarea>
-        </div>
+        ${infoFields({ category: preset }, categories, equipment)}
         <div class="callout callout-info">
-          Hệ thống tự đọc nội dung để tra cứu được ngay; tệp gốc vẫn giữ nguyên để mở ra đọc. PDF bản scan cần OCR trước khi tải lên.
+          Hệ thống tự đọc nội dung để tra cứu được ngay; tệp gốc vẫn giữ nguyên để mở ra đọc. Mã hiệu, số quyết định,
+          ngày ban hành, ngày hiệu lực để trống thì phần mềm tự đọc từ trang bìa quy trình (nếu có).
+          PDF bản scan cần OCR trước khi tải lên.
         </div>
       </form>`,
     footer: `
@@ -259,7 +295,7 @@ function openUpload(categories, equipment, onDone, preset) {
           if (result.index_status === 'loi') {
             toast(`Đã lưu tệp nhưng không nạp được nội dung: ${result.index_error}`, 'error', 8000);
           } else {
-            toast(`Đã nạp "${result.title}", tra cứu được ngay`, 'success');
+            toast(`Đã nạp "${result.title}", tra cứu được ngay.${autoFilledNote(result)}`, 'success', result.auto_filled?.length ? 9000 : 4200);
           }
           onDone();
         } catch (err) {
@@ -267,6 +303,35 @@ function openUpload(categories, equipment, onDone, preset) {
           btn.disabled = false;
           btn.innerHTML = 'Tải lên tài liệu';
         }
+      });
+    },
+  });
+}
+
+async function openEdit(doc, onSaved) {
+  let categories;
+  let equipment;
+  try {
+    [categories, equipment] = await Promise.all([api.categories(), api.equipmentList()]);
+  } catch (err) { toast(err.message, 'error'); return; }
+  openModal({
+    title: 'Sửa thông tin tài liệu',
+    body: `<form id="edit-form" onsubmit="return false">${infoFields(doc, categories, equipment)}</form>`,
+    footer: `
+      <button class="btn" data-close>Huỷ</button>
+      <button class="btn btn-primary" id="do-save">${icon('check', 16)}Lưu thông tin</button>`,
+    onMount(root, close) {
+      qs('#do-save', root).addEventListener('click', async () => {
+        const form = qs('#edit-form', root);
+        if (!form.reportValidity()) return;
+        const data = Object.fromEntries(new FormData(form));
+        data.equipment_id = data.equipment_id ? Number(data.equipment_id) : null;
+        try {
+          const saved = await api.put(`/api/documents/${doc.id}`, data);
+          close();
+          toast('Đã lưu thông tin tài liệu', 'success');
+          onSaved(saved);
+        } catch (err) { toast(err.message, 'error', 7000); }
       });
     },
   });
@@ -295,7 +360,7 @@ async function renderDetail(root, id) {
   const isFile = doc.source_kind === 'tep';
   setPage({
     title: doc.title,
-    subtitle: `${doc.category_label}${doc.equipment_name ? ' · ' + doc.equipment_name : ''}`,
+    subtitle: `${doc.doc_code ? `${doc.doc_code} · ` : ''}${doc.category_label}${doc.equipment_name ? ' · ' + doc.equipment_name : ''}`,
     actions: `
       <button class="btn btn-sm" data-back>${icon('chevronLeft', 15)}${esc(groupOf(doc.category).title)}</button>
       ${isFile && doc.stored_name ? `
@@ -303,7 +368,10 @@ async function renderDetail(root, id) {
           ${icon('library', 15)}MỞ TÀI LIỆU</a>
         <a class="btn btn-sm" href="/api/documents/${id}/file?tai_ve=true">
           ${icon('download', 15)}Tải về</a>` : ''}
-      ${isFile ? `<button class="btn btn-sm" id="reindex" data-perm="tai_lieu">${icon('refresh', 15)}Nạp lại</button>` : ''}`,
+      ${isFile ? `<button class="btn btn-sm" id="edit-info" data-perm="tai_lieu">${icon('edit', 15)}Sửa thông tin</button>
+        <label class="btn btn-sm" data-perm="tai_lieu" style="cursor:pointer" title="Thay bằng tệp mới (quy trình sửa đổi, bản rõ hơn…), giữ nguyên thông tin">
+          ${icon('upload', 15)}Thay tệp<input type="file" id="replace-file" accept=".pdf,.docx,.txt,.md,.xlsx,.csv" hidden></label>
+        <button class="btn btn-sm" id="reindex" data-perm="tai_lieu">${icon('refresh', 15)}Nạp lại</button>` : ''}`,
   });
 
   const [cls, label] = STATUS[doc.index_status] || STATUS.cho_xu_ly;
@@ -332,15 +400,19 @@ async function renderDetail(root, id) {
 
       <section class="card">
         <div class="card-head"><h2 class="card-title">Thông tin tài liệu</h2></div>
-        <dl class="kv" style="grid-template-columns:130px 1fr">
+        <dl class="kv" style="grid-template-columns:150px 1fr">
           <dt>Trạng thái</dt><dd><span class="badge ${cls}">${esc(label)}</span></dd>
-          <dt>Phân loại</dt><dd>${isFile ? `<select class="select" id="doc-category" style="padding:4px 8px;font-size:13px" ${can('tai_lieu') ? '' : 'disabled'}></select>` : esc(doc.category_label)}</dd>
+          ${doc.doc_code ? `<dt>Mã hiệu</dt><dd class="mono" style="font-weight:700">${esc(doc.doc_code)}</dd>` : ''}
+          ${doc.decision_no ? `<dt>Quyết định ban hành</dt><dd>Số ${esc(doc.decision_no)}</dd>` : ''}
+          ${doc.issued_date ? `<dt>Ngày ban hành</dt><dd>${esc(viDate(doc.issued_date))}</dd>` : ''}
+          ${doc.effective_date ? `<dt>Ngày hiệu lực</dt><dd>${esc(viDate(doc.effective_date))}</dd>` : ''}
+          ${doc.version ? `<dt>Lần ban hành</dt><dd>${esc(doc.version)}</dd>` : ''}
+          ${isFile && can('tai_lieu') && !(doc.doc_code && doc.decision_no) ? `<dt></dt><dd><a href="javascript:void(0)" id="edit-info-2" style="font-size:13px">+ Bổ sung mã hiệu, số quyết định…</a></dd>` : ''}
+          <dt>Phân loại</dt><dd>${esc(doc.category_label)}</dd>
           <dt>Nguồn</dt><dd>${isFile ? 'Tệp tải lên' : 'Sinh từ bản ghi nghiệp vụ'}</dd>
           ${doc.equipment_name ? `<dt>Thiết bị</dt><dd>${esc(doc.equipment_name)}</dd>` : ''}
           ${doc.filename ? `<dt>Tên tệp</dt><dd class="mono">${esc(doc.filename)}</dd>` : ''}
           ${doc.size_bytes ? `<dt>Dung lượng</dt><dd>${esc(formatBytes(doc.size_bytes))}</dd>` : ''}
-          ${doc.version ? `<dt>Phiên bản</dt><dd>${esc(doc.version)}</dd>` : ''}
-          ${doc.issued_date ? `<dt>Ngày ban hành</dt><dd>${esc(doc.issued_date)}</dd>` : ''}
           ${doc.tags ? `<dt>Thẻ</dt><dd>${esc(doc.tags)}</dd>` : ''}
           <dt>Số ký tự</dt><dd>${Number(doc.n_chars).toLocaleString('vi-VN')}</dd>
           <dt>Ngày nạp</dt><dd>${esc(formatDateTime(doc.created_at))}</dd>
@@ -357,22 +429,34 @@ async function renderDetail(root, id) {
 
   document.querySelector('[data-back]')?.addEventListener('click', () => navigate(groupOf(doc.category).path));
 
-  // Đổi phân loại là chuyển tài liệu sang trang thư viện khác (VH&XLSC, BD-SC,
-  // tài liệu kỹ thuật) — cần khi lỡ tải lên nhầm nhóm.
-  const catSelect = qs('#doc-category', root);
-  if (catSelect) {
-    api.categories().then((cats) => {
-      catSelect.innerHTML = cats.items.map((c) => `<option value="${c.value}" ${c.value === doc.category ? 'selected' : ''}>${esc(c.label)}</option>`).join('');
-    });
-    catSelect.addEventListener('change', async () => {
-      try {
-        const saved = await api.put(`/api/documents/${id}`, { category: catSelect.value });
-        const target = groupOf(saved.category);
-        toast(`Đã chuyển sang "${target.title}"`, 'success');
-        navigate(`${target.path}/${id}`);
-      } catch (err) { toast(err.message, 'error'); }
-    });
-  }
+  // Sửa thông tin; đổi phân loại là chuyển tài liệu sang trang thư viện khác
+  // (VH&XLSC, BD-SC, tài liệu kỹ thuật) — cần khi lỡ tải lên nhầm nhóm.
+  const edit = () => openEdit(doc, (saved) => {
+    const target = groupOf(saved.category);
+    if (target.path !== groupOf(doc.category).path) {
+      toast(`Đã chuyển sang "${target.title}"`, 'success');
+      navigate(`${target.path}/${id}`);
+    } else {
+      renderDetail(root, id);
+    }
+  });
+  document.querySelector('#edit-info')?.addEventListener('click', edit);
+  qs('#edit-info-2', root)?.addEventListener('click', edit);
+  document.querySelector('#replace-file')?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!(await confirmDialog(`Thay tệp "${doc.filename}" bằng "${file.name}"? Nội dung tra cứu được đọc lại từ tệp mới; thông tin đã nhập giữ nguyên.`,
+      { title: 'Thay tệp tài liệu', danger: false }))) return;
+    const form = new FormData();
+    form.append('file', file);
+    toast('Đang nạp tệp mới…', 'info');
+    try {
+      const saved = await api.upload(`/api/documents/${id}/tep`, form);
+      toast(`Đã thay tệp.${autoFilledNote(saved)}`, 'success', 7000);
+      renderDetail(root, id);
+    } catch (err) { toast(err.message, 'error', 8000); }
+  });
   qs('#ask-about', root).addEventListener('click', () => navigate('/tro-ly', { q: doc.title }));
 
   const inputQ = document.querySelector('#doc-q');
@@ -403,8 +487,8 @@ async function renderDetail(root, id) {
   document.querySelector('#reindex')?.addEventListener('click', async (e) => {
     e.target.disabled = true;
     try {
-      await api.post(`/api/documents/${id}/reindex`);
-      toast('Đã nạp lại tài liệu', 'success');
+      const saved = await api.post(`/api/documents/${id}/reindex`);
+      toast(`Đã nạp lại tài liệu.${autoFilledNote(saved)}`, 'success', 6000);
       renderDetail(root, id);
     } catch (err) {
       toast(err.message, 'error');

@@ -94,11 +94,14 @@ class FormIn(BaseModel):
 class DocumentUpdate(BaseModel):
     title: str | None = None
     category: str | None = None
-    equipment_id: int | None = None
+    equipment_id: int | None = None   # gửi null để bỏ gắn thiết bị
     tags: str | None = None
     version: str | None = None
     issued_date: str | None = None
     description: str | None = None
+    doc_code: str | None = None        # mã hiệu, VD HHC-VH-QT-20
+    decision_no: str | None = None     # số quyết định ban hành, VD 86/QĐ-HHC
+    effective_date: str | None = None
 
 
 class AskIn(BaseModel):

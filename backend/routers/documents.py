@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import uuid
 from pathlib import Path
 from urllib.parse import quote
@@ -8,12 +9,12 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 
 from ..config import ALLOWED_EXTENSIONS, MAX_UPLOAD_MB, UPLOAD_DIR
-from .. import docview
+from .. import auth, docview
 from ..db import execute, query, query_one, rows_to_dicts
 from ..models import DocumentUpdate
 from ..rag.index import index
 from ..rag.indexer import index_file
-from ..rag.textutils import normalize
+from ..rag.textutils import normalize, strip_accents
 
 router = APIRouter(prefix="/api/documents", tags=["Thư viện kỹ thuật"])
 
@@ -61,7 +62,8 @@ def list_documents(q: str = "", category: str = "", equipment_id: int | None = N
         needle = normalize(q)
         items = [
             it for it in items
-            if needle in normalize(f"{it['title']} {it['tags']} {it['description']} {it['equipment_name']}")
+            if needle in normalize(f"{it['title']} {it['doc_code']} {it['decision_no']} {it['tags']} "
+                                   f"{it['description']} {it['equipment_name']}")
         ]
     for item in items:
         item["category_label"] = CATEGORIES.get(item["category"], item["category"])
@@ -193,6 +195,9 @@ async def upload_document(
     issued_date: str = Form(""),
     description: str = Form(""),
     uploaded_by: str = Form(""),
+    doc_code: str = Form(""),
+    decision_no: str = Form(""),
+    effective_date: str = Form(""),
 ) -> dict:
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in ALLOWED_EXTENSIONS:
@@ -212,12 +217,15 @@ async def upload_document(
     document_id = execute(
         """INSERT INTO documents (title, filename, stored_name, mime, size_bytes, category,
                                   equipment_id, tags, version, issued_date, uploaded_by,
-                                  description, source_kind, index_status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'tep', 'dang_xu_ly')""",
+                                  description, doc_code, decision_no, effective_date,
+                                  source_kind, index_status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'tep', 'dang_xu_ly')""",
         (
             title.strip() or Path(file.filename or stored_name).stem,
             file.filename or stored_name, stored_name, file.content_type or "",
-            len(payload), category, eq_id, tags, version, issued_date, uploaded_by, description,
+            len(payload), category, eq_id, tags, version, issued_date,
+            uploaded_by or auth.display_name(), description,
+            doc_code.strip(), decision_no.strip(), effective_date.strip(),
         ),
     )
 
@@ -235,16 +243,82 @@ async def upload_document(
                   index_error = '' WHERE id = ?""",
         (n_chars, n_chunks, document_id),
     )
-    return get_document(document_id)
+    filled = _autofill_issuance(document_id)
+    auth.note(query_one("SELECT title FROM documents WHERE id = ?", (document_id,))["title"])
+    return {**get_document(document_id), "auto_filled": filled}
+
+
+# ------------------------------------------------------------------ thông tin ban hành
+
+_ISSUANCE_LABELS = {"doc_code": "mã hiệu", "decision_no": "số quyết định",
+                    "issued_date": "ngày ban hành", "effective_date": "ngày hiệu lực"}
+
+
+def _iso(day: str, month: str, year: str) -> str:
+    try:
+        d, m, y = int(day), int(month), int(year)
+    except ValueError:
+        return ""
+    return f"{y:04d}-{m:02d}-{d:02d}" if 1 <= d <= 31 and 1 <= m <= 12 and 1990 <= y <= 2100 else ""
+
+
+def detect_issuance(text: str) -> dict:
+    """Đọc mã hiệu, số quyết định, ngày ban hành, ngày hiệu lực ở trang bìa quy trình.
+
+    Trang bìa quy trình của nhà máy ghi theo mẫu:
+        MÃ HIỆU: HHC-VH-QT-20      NGÀY HIỆU LỰC: 11/3/2025
+        (Ban hành kèm theo Quyết định số: 86/QĐ-HHC ngày 11 tháng 3 năm 2025 ...)
+    Chỉ đọc phần đầu tài liệu; so khớp trên bản bỏ dấu để không phụ thuộc dấu,
+    hoa thường hay lỗi gõ dấu.
+    """
+    plain = strip_accents(text[:6000])
+    found: dict[str, str] = {}
+    for m in re.finditer(r"\bMA\s*HIEU\s*[:：]?\s*([A-Z0-9][A-Z0-9.\-/_]*[A-Z0-9])", plain, re.I):
+        # Mã hiệu thật có số hoặc gạch nối; bỏ qua "mã hiệu thiết bị..." trong thân bài.
+        if len(m.group(1)) >= 4 and re.search(r"[\d\-]", m.group(1)):
+            found["doc_code"] = m.group(1).upper()
+            break
+    m = re.search(r"Quyet\s+dinh\s+so\s*[:：]?\s*(\d{1,5})\s*/\s*(QD\s*[-–]?\s*[A-Z0-9]+(?:\s*-\s*[A-Z0-9]+)*)",
+                  plain, re.I)
+    if m:
+        suffix = re.sub(r"\s+", "", m.group(2)).upper().replace("–", "-")
+        found["decision_no"] = f"{m.group(1)}/QĐ{suffix[2:]}"
+        near = plain[m.end():m.end() + 80]
+        d = re.search(r"ngay\s*(\d{1,2})\s*thang\s*(\d{1,2})\s*nam\s*(\d{4})", near, re.I)
+        if d and _iso(*d.groups()):
+            found["issued_date"] = _iso(*d.groups())
+    m = re.search(r"HIEU\s+LUC\s*[:：]?\s*(?:(?:tu|ke\s+tu)\s+ngay\s*)?(\d{1,2})\s*[/.\-]\s*(\d{1,2})\s*[/.\-]\s*(\d{4})",
+                  plain, re.I)
+    if m and _iso(*m.groups()):
+        found["effective_date"] = _iso(*m.groups())
+    return found
+
+
+def _autofill_issuance(document_id: int) -> list[str]:
+    """Điền các ô ban hành còn trống từ nội dung tệp. Trả về tên các ô đã điền."""
+    doc = query_one("SELECT * FROM documents WHERE id = ?", (document_id,))
+    text = "\n".join(r["text"] for r in query(
+        "SELECT text FROM chunks WHERE document_id = ? ORDER BY ord LIMIT 8", (document_id,)))
+    found = {k: v for k, v in detect_issuance(text).items() if not (doc[k] or "").strip()}
+    if found:
+        execute(f"UPDATE documents SET {', '.join(f'{k} = ?' for k in found)} WHERE id = ?",
+                (*found.values(), document_id))
+        index.rebuild()
+    return [_ISSUANCE_LABELS[k] for k in found]
 
 
 @router.put("/{document_id}")
 def update_document(document_id: int, payload: DocumentUpdate) -> dict:
     if query_one("SELECT id FROM documents WHERE id = ?", (document_id,)) is None:
         raise HTTPException(404, "Không tìm thấy tài liệu")
-    fields = payload.model_dump(exclude_none=True)
+    # exclude_unset: gửi equipment_id = null là bỏ gắn thiết bị; ô không gửi thì giữ nguyên.
+    fields = payload.model_dump(exclude_unset=True)
+    fields = {k: (v.strip() if isinstance(v, str) else v) for k, v in fields.items()
+              if v is not None or k == "equipment_id"}
     if "category" in fields and fields["category"] not in CATEGORIES:
         raise HTTPException(400, "Phân loại không hợp lệ")
+    if "title" in fields and not fields["title"]:
+        raise HTTPException(400, "Tên tài liệu không được để trống")
     if fields:
         assignments = ", ".join(f"{k} = ?" for k in fields)
         execute(f"UPDATE documents SET {assignments} WHERE id = ?",
@@ -274,7 +348,43 @@ def reindex_document(document_id: int) -> dict:
                   index_error = '' WHERE id = ?""",
         (n_chars, n_chunks, document_id),
     )
-    return get_document(document_id)
+    filled = _autofill_issuance(document_id)
+    return {**get_document(document_id), "auto_filled": filled}
+
+
+@router.post("/{document_id}/tep")
+async def replace_file(document_id: int, file: UploadFile = File(...)) -> dict:
+    """Thay tệp bằng bản mới (quy trình sửa đổi, bản scan rõ hơn...). Giữ nguyên
+    mục trong thư viện và các thông tin đã nhập; nội dung tra cứu đọc lại từ tệp mới."""
+    row = query_one("SELECT stored_name, source_kind FROM documents WHERE id = ?", (document_id,))
+    if row is None:
+        raise HTTPException(404, "Không tìm thấy tài liệu")
+    if row["source_kind"] != "tep":
+        raise HTTPException(400, "Tài liệu này sinh từ bản ghi nghiệp vụ, không có tệp để thay")
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in ALLOWED_EXTENSIONS:
+        raise HTTPException(415, f"Chỉ hỗ trợ định dạng: {', '.join(sorted(ALLOWED_EXTENSIONS))}")
+    payload = await file.read()
+    if len(payload) > MAX_UPLOAD_MB * 1024 * 1024:
+        raise HTTPException(413, f"Tệp vượt quá giới hạn {MAX_UPLOAD_MB} MB")
+    stored_name = f"{uuid.uuid4().hex}{suffix}"
+    path = UPLOAD_DIR / stored_name
+    path.write_bytes(payload)
+    try:
+        n_chars, n_chunks = index_file(document_id, path)
+    except Exception as exc:
+        path.unlink(missing_ok=True)
+        raise HTTPException(422, f"Không đọc được tệp mới, giữ nguyên tệp cũ: {exc}")
+    execute(
+        """UPDATE documents SET filename = ?, stored_name = ?, mime = ?, size_bytes = ?, n_chars = ?,
+                  n_chunks = ?, index_status = 'da_lap_chi_muc', index_error = '' WHERE id = ?""",
+        (file.filename or stored_name, stored_name, file.content_type or "", len(payload),
+         n_chars, n_chunks, document_id),
+    )
+    if row["stored_name"] and row["stored_name"] != stored_name:
+        (UPLOAD_DIR / row["stored_name"]).unlink(missing_ok=True)
+    filled = _autofill_issuance(document_id)
+    return {**get_document(document_id), "auto_filled": filled}
 
 
 @router.delete("/{document_id}", status_code=204)
