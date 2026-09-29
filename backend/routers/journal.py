@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
+from .. import auth
 from ..db import execute, query, query_one, row_to_dict, rows_to_dicts
 from ..models import JournalIn
 from ..rag.indexer import JOURNAL_LABELS, index_record, remove_record, render_journal
@@ -104,17 +105,31 @@ def get_entry(entry_id: int) -> dict:
 def create_entry(kind: str, payload: JournalIn) -> dict:
     _check_kind(kind)
     data = payload.model_dump()
+    user = auth.current_user() or {}
     new_id = execute(
-        f"INSERT INTO journal (kind, {', '.join(FIELDS)}) VALUES (?, {', '.join('?' * len(FIELDS))})",
-        (kind, *[data[f] for f in FIELDS]),
+        f"INSERT INTO journal (kind, created_by_id, created_by, {', '.join(FIELDS)}) "
+        f"VALUES (?, ?, ?, {', '.join('?' * len(FIELDS))})",
+        (kind, user.get("id"), user.get("full_name", ""), *[data[f] for f in FIELDS]),
     )
+    auth.note(data["title"])
     _reindex(new_id)
     return get_entry(new_id)
 
 
+def _check_owner(entry: dict) -> None:
+    """Sửa, xoá nhật ký người khác ghi: cần Trưởng ca trở lên. Bản ghi cũ (trước
+    khi có đăng nhập) không rõ người ghi thì ai cũng sửa được."""
+    user = auth.current_user()
+    owner = entry.get("created_by_id")
+    if owner is None or (user and owner == user["id"]) or auth.has("duyet") or auth.has("quan_tri"):
+        return
+    raise HTTPException(403, f"Nhật ký này do {entry.get('created_by') or 'người khác'} ghi. "
+                             "Chỉ người ghi hoặc Trưởng ca được sửa, xoá.")
+
+
 @router.put("/{entry_id}")
 def update_entry(entry_id: int, payload: JournalIn) -> dict:
-    _get(entry_id)
+    _check_owner(_get(entry_id))
     data = payload.model_dump()
     execute(
         f"UPDATE journal SET {', '.join(f'{f} = ?' for f in FIELDS)}, updated_at = datetime('now') "
@@ -128,6 +143,7 @@ def update_entry(entry_id: int, payload: JournalIn) -> dict:
 @router.delete("/{entry_id}", status_code=204)
 def delete_entry(entry_id: int) -> None:
     entry = _get(entry_id)
+    _check_owner(entry)
     execute("DELETE FROM journal WHERE id = ?", (entry_id,))
     remove_record(SOURCE_KIND[entry["kind"]], entry_id)
 

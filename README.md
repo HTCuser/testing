@@ -120,6 +120,21 @@ Tài liệu API tự sinh: <http://localhost:8000/docs>
 > thành quy trình chính thức. Lệnh này chỉ xoá đúng các mã do công cụ tạo, không đụng tới tài
 > liệu tải lên và bản ghi nhà máy tự nhập.
 
+### Triển khai làm máy chủ dùng chung
+
+Xem **[TRIEN-KHAI.md](TRIEN-KHAI.md)**: cài máy chủ (`cai-dat-may-chu.bat` — tự chạy khi bật
+máy, tự sao lưu, mở tường lửa), tài khoản và phân quyền, dọn dữ liệu thử, sao lưu / khôi phục,
+cập nhật (`cap-nhat.bat`).
+
+### Đăng nhập và phân quyền
+
+Lần đầu mở phần mềm sẽ tạo tài khoản quản trị. Quản trị thêm tài khoản cho từng người ở menu
+**Quản trị** với một trong bốn vai trò: Vận hành viên, Trưởng ca (thêm quyền duyệt, huỷ phiếu),
+Kỹ thuật viên (thêm quyền quản lý tài liệu, thiết bị), Quản trị hệ thống. Máy chủ kiểm quyền ở
+mọi yêu cầu (`backend/auth.py`, bảng `RULES`); giao diện ẩn nút mà tài khoản không có quyền.
+Mọi thao tác ghi (lập, duyệt, huỷ phiếu, tích bước, xoá tài liệu, đăng nhập...) được ghi vào
+**Nhật ký hệ thống**. Quên mật khẩu quản trị: `tai-khoan.bat` trên máy chủ.
+
 ### Cho máy khác trong mạng nhà máy truy cập
 
 Máy chủ đã lắng nghe trên mọi địa chỉ mạng. Xem IP của máy đang chạy
@@ -323,6 +338,11 @@ backend/
   routers/journal.py   Nhật ký thao tác vận hành, bảo dưỡng sửa chữa
   mau/                 Mẫu phiếu thao tác ví dụ
   chandoan.py          Soi thứ hạng truy hồi của một câu hỏi (công cụ dòng lệnh)
+  auth.py              Đăng nhập, phiên, bảng phân quyền, nhật ký hệ thống
+  saoluu.py            Sao lưu / khôi phục (python -m backend.saoluu)
+  taikhoan.py          Đặt lại mật khẩu từ dòng lệnh (python -m backend.taikhoan)
+  routers/auth.py      Đăng nhập, đổi mật khẩu, tạo quản trị lần đầu
+  routers/admin.py     Người dùng, nhật ký hệ thống, sao lưu, dọn dữ liệu thử
   main.py              Khởi tạo FastAPI, phục vụ giao diện tĩnh
   rag/
     textutils.py       Chuẩn hoá, bỏ dấu, tách unigram + bigram tiếng Việt
@@ -337,13 +357,18 @@ frontend/
   index.html
   static/css/          app.css (giao diện), print.css (bản in A4)
   static/js/
-    app.js             Khai báo tuyến và khởi động
+    app.js             Khai báo tuyến và khởi động (đăng nhập trước khi dựng khung)
+    session.js         Người đang đăng nhập, quyền (can), ẩn nút data-perm
+    login.js           Màn hình đăng nhập, tạo quản trị, đổi mật khẩu
     router.js          Định tuyến theo hash
     shell.js           Sidebar, thanh tiêu đề, chân trang
     ui.js              Tiện ích DOM, modal, toast, markdown rút gọn
     print.js           Dựng bản in phiếu thao tác / cô lập / quy trình
     pages/             Từng trang nghiệp vụ
-data/                  SQLite, tệp tải lên (không đưa vào git)
+data/                  SQLite, tệp tải lên, log (không đưa vào git)
+scripts/               Cài máy chủ Windows (PowerShell), vòng chạy nền
+*.bat                  run, cai-dat-may-chu, cap-nhat, dung/khoi-dong-may-chu,
+                       sao-luu, khoi-phuc, tai-khoan, go-cai-dat-may-chu
 ```
 
 Giao diện là SPA thuần ES module — **không cần bước build, không phụ thuộc npm**. Sửa file trong
@@ -358,8 +383,11 @@ Giao diện là SPA thuần ES module — **không cần bước build, không p
   quy trình đã được phê duyệt của nhà máy.
 - **PDF bản scan cần OCR trước khi tải lên.** Hệ thống chỉ đọc được lớp văn bản trong PDF; tài liệu
   scan ảnh sẽ báo lỗi nạp và hiện trong mục Cấu hình.
-- **Chưa có phân quyền người dùng.** Mọi người truy cập được đều có quyền thêm, sửa, xoá. Trước khi
-  mở rộng ra toàn nhà máy cần bổ sung đăng nhập và phân quyền theo chức danh (vận hành viên, trưởng
-  ca, kỹ thuật viên).
+- **Mỗi người một tài khoản.** Không dùng chung tài khoản; nhật ký hệ thống chỉ có ý nghĩa khi
+  biết đúng ai đã thao tác. Máy dùng chung phòng điều khiển: đăng xuất khi hết ca.
+- **Sao lưu ra ổ khác.** Đặt `SAO_LUU_DIR` sang ổ khác ổ cài phần mềm; định kỳ chép thư mục sao
+  lưu ra nơi thứ ba.
+- **Dữ liệu gửi ra ngoài khi bật trợ lý tổng hợp** (có `ANTHROPIC_API_KEY`): cần công ty cho
+  phép; không được phép thì để trống key, mọi thứ chạy nội bộ.
 - **Công cụ tra cứu hỗ trợ, không thay thế quy trình.** Mọi thao tác trên thiết bị vẫn phải theo
   phiếu thao tác đã được duyệt và mệnh lệnh của Trưởng ca.

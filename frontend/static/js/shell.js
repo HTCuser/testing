@@ -1,4 +1,7 @@
+import { api } from './api.js';
 import { icon } from './icons.js';
+import { changePasswordDialog } from './login.js';
+import { initials } from './session.js';
 import { clock, esc, qs } from './ui.js';
 
 export const NAV = [
@@ -18,11 +21,12 @@ export const NAV = [
   { path: '/sua-chua', label: 'Bảo dưỡng, sửa chữa', icon: 'maintenance' },
   { section: 'Hệ thống' },
   { path: '/cau-hinh', label: 'Cấu hình', icon: 'settings' },
+  { path: '/quan-tri', label: 'Quản trị', icon: 'shield', perm: 'quan_tri' },
 ];
 
 const STORAGE_KEY = 'huana.sidebar.collapsed';
 
-export function buildShell(rootEl, plantName) {
+export function buildShell(rootEl, plantName, user = null) {
   const collapsed = readCollapsed();
   rootEl.innerHTML = `
     <div class="layout">
@@ -35,12 +39,17 @@ export function buildShell(rootEl, plantName) {
           </div>
         </div>
         <nav class="nav" id="nav">${navMarkup()}</nav>
-        <div class="user-box">
-          <div class="avatar">VH</div>
+        <button class="user-box" id="user-box" type="button" title="Đổi mật khẩu, đăng xuất">
+          <div class="avatar">${esc(initials(user?.full_name || ''))}</div>
           <div class="user-meta">
-            <div class="user-name">Vận hành viên</div>
-            <div class="user-role">Ca trực</div>
+            <div class="user-name">${esc(user?.full_name || 'Chưa đăng nhập')}</div>
+            <div class="user-role">${esc(user?.role_label || '')}</div>
           </div>
+        </button>
+        <div class="user-menu" id="user-menu" hidden>
+          <div class="user-menu-head">${esc(user?.full_name || '')}<span>${esc(user?.username || '')}${user?.title ? ` · ${esc(user.title)}` : ''}</span></div>
+          <button type="button" data-um="password">${icon('shield', 16)}Đổi mật khẩu</button>
+          <button type="button" data-um="logout">${icon('chevronLeft', 16)}Đăng xuất</button>
         </div>
         <button class="collapse-btn" id="collapse-btn" title="Thu gọn/mở rộng thanh điều hướng">
           ${icon('chevronLeft', 15)}
@@ -76,7 +85,27 @@ export function buildShell(rootEl, plantName) {
   });
   qs('#collapse-btn').innerHTML = icon(collapsed ? 'chevronRight' : 'chevronLeft', 15);
 
-  setInterval(() => { qs('#live-clock').textContent = `Cập nhật: ${clock()}`; }, 1000);
+  const timer = setInterval(() => {
+    const el = qs('#live-clock');
+    // Khung đã bị thay bằng màn hình đăng nhập (phiên hết hạn).
+    if (!el) { clearInterval(timer); return; }
+    el.textContent = `Cập nhật: ${clock()}`;
+  }, 1000);
+
+  const menu = qs('#user-menu');
+  qs('#user-box').addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
+  document.addEventListener('click', (e) => { if (!menu.contains(e.target)) menu.hidden = true; });
+  menu.addEventListener('click', async (e) => {
+    const act = e.target.closest('[data-um]')?.dataset.um;
+    if (!act) return;
+    menu.hidden = true;
+    if (act === 'password') changePasswordDialog();
+    if (act === 'logout') {
+      try { await api.logout(); } catch { /* phiên đã hết thì cũng coi như đã đăng xuất */ }
+      window.location.hash = '#/';
+      window.location.reload();
+    }
+  });
 }
 
 function readCollapsed() {
@@ -87,7 +116,7 @@ function navMarkup() {
   return NAV.map((item) => {
     if (item.section) return `<div class="nav-section">${esc(item.section)}</div>`;
     return `
-      <a class="nav-item" href="#${item.path}" data-path="${item.path}" title="${esc(item.label)}">
+      <a class="nav-item" href="#${item.path}" data-path="${item.path}" title="${esc(item.label)}"${item.perm ? ` data-perm="${item.perm}"` : ''}>
         ${icon(item.icon, 19)}<span class="nav-label">${esc(item.label)}</span>
       </a>`;
   }).join('');

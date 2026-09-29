@@ -300,6 +300,45 @@ CREATE TABLE IF NOT EXISTS ptt_attachments (
     created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- ====================== Người dùng, phiên đăng nhập, nhật ký hệ thống
+CREATE TABLE IF NOT EXISTS users (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    username       TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    full_name      TEXT NOT NULL,
+    title          TEXT NOT NULL DEFAULT '',        -- chức danh in trên phiếu
+    role           TEXT NOT NULL DEFAULT 'van_hanh',
+    password_hash  TEXT NOT NULL,
+    must_change    INTEGER NOT NULL DEFAULT 0,      -- mật khẩu do quản trị đặt: đổi khi đăng nhập
+    active         INTEGER NOT NULL DEFAULT 1,
+    last_login     TEXT NOT NULL DEFAULT '',
+    created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Chỉ lưu băm của mã phiên: lộ file CSDL cũng không dùng lại được phiên.
+CREATE TABLE IF NOT EXISTS sessions (
+    token_hash  TEXT PRIMARY KEY,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at  REAL NOT NULL,
+    last_seen   REAL NOT NULL,
+    ip          TEXT NOT NULL DEFAULT ''
+);
+
+-- Ai làm gì, lúc nào. Lưu sẵn tên người để xoá tài khoản vẫn còn dấu vết.
+CREATE TABLE IF NOT EXISTS audit_log (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at  TEXT NOT NULL,                      -- giờ nhà máy
+    user_id     INTEGER,
+    username    TEXT NOT NULL DEFAULT '',
+    full_name   TEXT NOT NULL DEFAULT '',
+    action      TEXT NOT NULL,
+    target      TEXT NOT NULL DEFAULT '',
+    method      TEXT NOT NULL DEFAULT '',
+    path        TEXT NOT NULL DEFAULT '',
+    status      INTEGER NOT NULL DEFAULT 0,
+    ip          TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_audit_time ON audit_log(created_at);
+
 CREATE TABLE IF NOT EXISTS ask_usage (
     period_kind   TEXT NOT NULL,
     period_key    TEXT NOT NULL,
@@ -355,6 +394,17 @@ def _migrate_ptt(conn: sqlite3.Connection) -> None:
     _add_columns(conn, "ptt_tickets", {
         "handover_before": "TEXT NOT NULL DEFAULT '[]'",
         "handover_after": "TEXT NOT NULL DEFAULT '[]'",
+        # Tài khoản đã lập / duyệt / huỷ phiếu (tên đầy đủ) — khác với tên
+        # người ký gõ trên phiếu, để truy lại khi cần.
+        "created_by_id": "INTEGER",
+        "created_by": "TEXT NOT NULL DEFAULT ''",
+        "approved_by": "TEXT NOT NULL DEFAULT ''",
+        "cancelled_by": "TEXT NOT NULL DEFAULT ''",
+    })
+    _add_columns(conn, "ptt_ticket_steps", {"done_by": "TEXT NOT NULL DEFAULT ''"})
+    _add_columns(conn, "journal", {
+        "created_by_id": "INTEGER",
+        "created_by": "TEXT NOT NULL DEFAULT ''",
     })
 
 

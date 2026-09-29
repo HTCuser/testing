@@ -12,7 +12,7 @@ export async function render(root) {
   if (isStale(root)) return;
   setPage({
     ...meta,
-    actions: `<button class="btn btn-sm" id="reindex-btn">${icon('refresh', 15)}Dựng lại chỉ mục</button>`,
+    actions: `<button class="btn btn-sm" id="reindex-btn" data-perm="quan_tri">${icon('refresh', 15)}Dựng lại chỉ mục</button>`,
   });
   root.innerHTML = loading();
 
@@ -165,7 +165,7 @@ export async function render(root) {
             Đọc lại toàn bộ tệp gốc và cắt đoạn lại từ đầu. Bấm sau mỗi lần cập nhật phần mềm
             hoặc khi nghi ngờ kết quả tra cứu không khớp nội dung thư viện. Không xoá dữ liệu.
           </p>
-          <button class="btn btn-primary" style="width:100%" id="reindex-btn-2">
+          <button class="btn btn-primary" style="width:100%" id="reindex-btn-2" data-perm="quan_tri">
             ${icon('refresh', 16)}Dựng lại chỉ mục tra cứu
           </button>
         </section>

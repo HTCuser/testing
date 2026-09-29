@@ -16,7 +16,7 @@ export async function render(root, ctx) {
 
   setPage({
     ...meta,
-    actions: `<button class="btn btn-accent" id="add-btn">${icon('plus', 16)}THÊM THIẾT BỊ</button>`,
+    actions: `<button class="btn btn-accent" id="add-btn" data-perm="tai_lieu">${icon('plus', 16)}THÊM THIẾT BỊ</button>`,
   });
   root.innerHTML = loading();
 
@@ -207,8 +207,8 @@ async function renderDetail(root, id) {
     subtitle: `${item.code}${item.system ? ' · ' + item.system : ''}`,
     actions: `
       <button class="btn btn-sm" data-back>${icon('chevronLeft', 15)}Danh mục</button>
-      <button class="btn btn-sm" id="edit-btn">${icon('edit', 15)}Sửa</button>
-      <button class="btn btn-sm btn-danger" id="del-btn">${icon('trash', 15)}Xoá</button>`,
+      <button class="btn btn-sm" id="edit-btn" data-perm="tai_lieu">${icon('edit', 15)}Sửa</button>
+      <button class="btn btn-sm btn-danger" id="del-btn" data-perm="tai_lieu">${icon('trash', 15)}Xoá</button>`,
   });
 
   root.innerHTML = `

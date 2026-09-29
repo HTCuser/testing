@@ -17,7 +17,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from pydantic import BaseModel, Field
 
-from .. import config, docview, phieu
+from .. import auth, config, docview, phieu
 from ..db import get_conn, query, query_one
 from ..rag.indexer import index_record, remove_record
 from ..rag.textutils import normalize, strip_accents
@@ -688,15 +688,15 @@ def create_ticket(payload: TicketIn) -> dict:
         cur = conn.execute(
             """INSERT INTO ptt_tickets (template_id, book, year, number, code, kind, name, purpose,
                    conditions, notes, requesting_unit, issuing_unit, planned_start, planned_end, people,
-                   created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   created_at, created_by_id, created_by)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (payload.template_id, book, year, number, _code(number, year, kind), kind,
              payload.name.strip(), payload.purpose.strip(), payload.conditions.strip(),
              payload.notes.strip(), payload.requesting_unit.strip(), config.ORG_UNIT,
              payload.planned_start, payload.planned_end, _dumps(payload.people.model_dump()),
              # Giờ nhà máy, không phải giờ UTC mặc định của SQLite: ngày lập phiếu
              # in trên phiếu và đếm trên dashboard phải đúng ngày trực ca.
-             _now_iso()),
+             _now_iso(), (auth.current_user() or {}).get("id"), auth.display_name()),
         )
         ticket_id = cur.lastrowid
         _replace_steps(conn, ticket_id, steps)
@@ -707,7 +707,9 @@ def create_ticket(payload: TicketIn) -> dict:
     except Exception:
         conn.rollback()
         raise
-    return _ticket(ticket_id)
+    t = _ticket(ticket_id)
+    auth.note(f"Phiếu {t['code']} — {t['name']}")
+    return t
 
 
 @router.get("/phieu/{ticket_id}")
@@ -773,7 +775,15 @@ def _transition(ticket_id: int, allowed: tuple, status: str, stamp: str, extra: 
 def approve(ticket_id: int) -> dict:
     if not query_one("SELECT id FROM ptt_ticket_steps WHERE ticket_id = ?", (ticket_id,)):
         raise HTTPException(400, "Phiếu chưa có bước thao tác nào")
-    return _transition(ticket_id, ("moi_lap",), "da_duyet", "approved_at")
+    t = _ticket(ticket_id, with_steps=False)
+    extra = {"approved_by": auth.display_name()}
+    user = auth.current_user()
+    people = t["people"]
+    if user and not (people.get("duyet") or {}).get("name"):
+        # Chưa ghi người duyệt trên phiếu: lấy người đang bấm duyệt.
+        people["duyet"] = {"name": user["full_name"], "title": user["title"] or user["role_label"]}
+        extra["people"] = _dumps(people)
+    return _transition(ticket_id, ("moi_lap",), "da_duyet", "approved_at", extra)
 
 
 @router.post("/phieu/{ticket_id}/tiep-nhan")
@@ -792,7 +802,14 @@ class CancelIn(BaseModel):
 
 @router.post("/phieu/{ticket_id}/huy")
 def cancel(ticket_id: int, payload: CancelIn) -> dict:
-    return _transition(ticket_id, OPEN, "huy", "cancelled_at", {"cancel_reason": payload.reason.strip()})
+    t = _ticket(ticket_id, with_steps=False)
+    user = auth.current_user()
+    own_draft = t["status"] == "moi_lap" and user is not None and t.get("created_by_id") == user["id"]
+    if not own_draft:
+        # Người lập tự huỷ phiếu mới lập của mình; còn lại là việc của Trưởng ca.
+        auth.require("duyet")
+    return _transition(ticket_id, OPEN, "huy", "cancelled_at",
+                       {"cancel_reason": payload.reason.strip(), "cancelled_by": auth.display_name()})
 
 
 class StepToggle(BaseModel):
@@ -819,10 +836,10 @@ def toggle_step(ticket_id: int, step_id: int, payload: StepToggle) -> dict:
             ((people.get("giam_sat") or [{}])[0].get("name", ""))
         receiver = payload.receiver if payload.receiver is not None else \
             ((people.get("thao_tac") or [{}])[0].get("name", ""))
-        conn.execute("UPDATE ptt_ticket_steps SET done = 1, done_at = ?, commander = ?, receiver = ? WHERE id = ?",
-                     (_now_iso(), commander.strip(), receiver.strip(), step_id))
+        conn.execute("UPDATE ptt_ticket_steps SET done = 1, done_at = ?, commander = ?, receiver = ?, done_by = ? "
+                     "WHERE id = ?", (_now_iso(), commander.strip(), receiver.strip(), auth.display_name(), step_id))
     else:
-        conn.execute("UPDATE ptt_ticket_steps SET done = 0, done_at = '', commander = '', receiver = '' "
+        conn.execute("UPDATE ptt_ticket_steps SET done = 0, done_at = '', commander = '', receiver = '', done_by = '' "
                      "WHERE id = ?", (step_id,))
     if payload.done and t["status"] == "da_duyet":
         # Bắt đầu tích bước tức là đã tiếp nhận phiếu và bắt tay thao tác.
@@ -979,6 +996,11 @@ def suggestions() -> dict:
                 titles.setdefault(p["title"], None)
         if row["requesting_unit"]:
             units.setdefault(row["requesting_unit"], None)
+    # Người có tài khoản đứng đầu danh sách gợi ý.
+    for row in query("SELECT full_name, title FROM users WHERE active = 1 ORDER BY full_name"):
+        names = {row["full_name"]: None, **names}
+        if row["title"]:
+            titles.setdefault(row["title"], None)
     for row in query("SELECT steps FROM ptt_templates ORDER BY updated_at DESC LIMIT 200"):
         for s in _loads(row["steps"], []):
             if s.get("location"):

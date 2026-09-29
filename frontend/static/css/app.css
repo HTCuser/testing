@@ -543,3 +543,51 @@ fieldset[disabled] .input, fieldset[disabled] .textarea { background: #f6f8f9; c
 /* Thuộc tính hidden phải thắng mọi quy tắc display của lớp (.badge, .select…),
    nếu không phần tử bị "ẩn" vẫn hiện ra — như nhãn "Chưa ghi" luôn nổi. */
 [hidden] { display: none !important; }
+
+/* ---------------------------------------------------------------- đăng nhập, phân quyền */
+/* Nút cần quyền gắn data-perm; body có lớp can-<quyền> theo người đăng nhập. */
+body:not(.can-duyet) [data-perm="duyet"],
+body:not(.can-mau) [data-perm="mau"],
+body:not(.can-tai_lieu) [data-perm="tai_lieu"],
+body:not(.can-quan_tri) [data-perm="quan_tri"] { display: none !important; }
+
+.login-wrap {
+  min-height: 100vh; display: grid; place-items: center; padding: 24px 16px;
+  background: linear-gradient(160deg, var(--nav-top), var(--nav-bottom));
+}
+.login-card {
+  width: 100%; max-width: 460px; background: var(--card); border-radius: 16px;
+  padding: 28px 30px; box-shadow: 0 20px 50px rgba(0, 0, 0, .28);
+}
+.login-card:has(#setup-form) { max-width: 600px; }
+.login-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+.login-name { font-weight: 800; font-size: 17px; color: var(--ink); }
+.login-title { font-size: 21px; margin: 0 0 16px; color: var(--ink); }
+.login-btn { width: 100%; justify-content: center; margin-top: 6px; padding: 11px; }
+.login-error { background: var(--red-soft); color: var(--red); border-radius: 8px; padding: 9px 12px; margin-bottom: 10px; font-size: 13.5px; }
+.login-hint { font-size: 12.5px; line-height: 1.6; margin: 16px 0 0; }
+
+button.user-box {
+  width: 100%; background: none; border: 0; border-top: 1px solid rgba(255,255,255,.09);
+  cursor: pointer; text-align: left; font: inherit;
+}
+button.user-box:hover { background: var(--nav-hover); }
+.user-menu {
+  position: absolute; left: 14px; right: 14px; bottom: 78px; z-index: 30;
+  background: #fff; border-radius: 10px; box-shadow: 0 12px 32px rgba(0, 0, 0, .3); overflow: hidden;
+}
+.sidebar.collapsed .user-menu { right: auto; width: 220px; }
+.user-menu-head { padding: 12px 14px; font-weight: 700; color: var(--ink); border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.user-menu-head span { display: block; font-weight: 400; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.user-menu button {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 14px;
+  background: none; border: 0; cursor: pointer; font: inherit; font-size: 13.5px; color: var(--ink-soft); text-align: left;
+}
+.user-menu button:hover { background: var(--teal-soft); color: var(--teal); }
+
+.clean-item {
+  display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--line);
+  border-radius: 10px; margin-bottom: 8px; cursor: pointer;
+}
+.clean-item:has(input:checked) { border-color: var(--red); background: var(--red-soft); }
+.clean-item input { margin-top: 3px; }

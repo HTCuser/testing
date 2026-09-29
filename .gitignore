@@ -19,3 +19,8 @@ data/ptt_dinh_kem/
 *.log
 .idea/
 .vscode/
+sao-luu/
+data/logs/
+may-chu.cfg.bat
+.env.txt
+data/huana.db.*

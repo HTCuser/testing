@@ -1,8 +1,9 @@
 import { api } from '../api.js';
 import { icon } from '../icons.js';
+import { can } from '../session.js';
 import { isStale, setPage } from '../shell.js';
 import { createStepGrid, importListsInto } from '../stepgrid.js';
-import { confirmDialog, errorState, esc, loading, openModal, qs, toast } from '../ui.js';
+import { confirmDialog, errorState, esc, loading, openModal, qs, qsa, toast } from '../ui.js';
 
 // Phiếu thao tác mẫu, bố cục như NKVH điện tử: Nhóm | Tên phiếu | bảng bước.
 
@@ -47,7 +48,7 @@ export async function render(root, ctx) {
       <section class="card ptt-pane">
         <div class="pane-head">
           <input class="input" id="g-filter" placeholder="Lọc nhóm…">
-          <button class="btn btn-sm btn-primary" id="g-add" title="Thêm nhóm">${icon('plus', 16)}</button>
+          <button class="btn btn-sm btn-primary" id="g-add" title="Thêm nhóm" data-perm="mau">${icon('plus', 16)}</button>
         </div>
         <div class="pane-title">Nhóm</div>
         <div id="g-list" class="pane-list"></div>
@@ -55,7 +56,7 @@ export async function render(root, ctx) {
       <section class="card ptt-pane">
         <div class="pane-head">
           <input class="input" id="t-filter" placeholder="Lọc tên phiếu…">
-          <button class="btn btn-sm btn-primary" id="t-add" title="Thêm phiếu mẫu vào nhóm đang chọn">${icon('plus', 16)}</button>
+          <button class="btn btn-sm btn-primary" id="t-add" title="Thêm phiếu mẫu vào nhóm đang chọn" data-perm="mau">${icon('plus', 16)}</button>
         </div>
         <div class="pane-title">Tên phiếu</div>
         <div id="t-list" class="pane-list"></div>
@@ -86,7 +87,7 @@ export async function render(root, ctx) {
     gList.innerHTML = items.length ? items.map((g) => `
       <div class="pane-item ${g.id === state.groupId ? 'active' : ''}" data-group="${g.id}">
         <span>${esc(g.name)} <span class="text-muted" style="font-size:12px">(${g.n_templates})</span></span>
-        <button class="btn btn-icon btn-sm" data-edit-group="${g.id}" title="Sửa nhóm">${icon('edit', 14)}</button>
+        <button class="btn btn-icon btn-sm" data-edit-group="${g.id}" title="Sửa nhóm" data-perm="mau">${icon('edit', 14)}</button>
       </div>`).join('') : '<p class="text-muted" style="padding:10px">Chưa có nhóm.</p>';
   }
   async function reloadGroups() {
@@ -154,7 +155,7 @@ export async function render(root, ctx) {
       : items.length ? items.map((t) => `
         <div class="pane-item ${t.id === state.templateId ? 'active' : ''}" data-tpl="${t.id}">
           <span>${esc(t.name)} <span class="text-muted" style="font-size:12px">· ${t.n_steps} bước</span></span>
-          <button class="btn btn-icon btn-sm" data-edit-tpl="${t.id}" title="Đổi tên, chuyển nhóm, sao chép, xoá">${icon('edit', 14)}</button>
+          <button class="btn btn-icon btn-sm" data-edit-tpl="${t.id}" title="Đổi tên, chuyển nhóm, sao chép, xoá" data-perm="mau">${icon('edit', 14)}</button>
         </div>`).join('')
         : '<p class="text-muted" style="padding:10px">Nhóm chưa có phiếu mẫu. Bấm + để thêm.</p>';
   }
@@ -249,7 +250,7 @@ export async function render(root, ctx) {
         <div class="card-actions">
           <span class="badge badge-amber" id="unsaved" hidden>Chưa ghi</span>
           <a class="btn btn-sm" href="#/phieu-thao-tac/moi?mau=${t.id}">${icon('plus', 15)}Lập phiếu từ mẫu này</a>
-          <button class="btn btn-sm btn-primary" id="save">${icon('check', 15)}Ghi</button>
+          <button class="btn btn-sm btn-primary" id="save" data-perm="mau">${icon('check', 15)}Ghi</button>
         </div>
       </div>
       <form id="tpl-form" onsubmit="return false">
@@ -272,6 +273,14 @@ export async function render(root, ctx) {
       onChange: markDirty, locations: hints.locations,
       onImport: (data, replace) => importListsInto(qs('#tpl-form', editor), data, replace),
     });
+    if (!can('mau')) {
+      // Vận hành viên xem được mẫu để lập phiếu, không sửa được.
+      editor.querySelectorAll('#tpl-form input, #tpl-form textarea, #grid input, #grid textarea').forEach((el) => { el.readOnly = true; });
+      qs('#grid .toolbar', editor)?.setAttribute('hidden', '');
+      qsa('#grid [data-sel], #grid [data-g="all"]', editor).forEach((el) => { el.disabled = true; });
+      qs('#grid', editor).insertAdjacentHTML('afterbegin',
+        '<p class="text-muted" style="margin:0 0 10px;font-size:12.5px">Chỉ Trưởng ca, Kỹ thuật viên, Quản trị được sửa phiếu mẫu.</p>');
+    }
     qs('#save', editor).addEventListener('click', async () => {
       const form = qs('#tpl-form', editor);
       if (!form.reportValidity()) return;

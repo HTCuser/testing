@@ -2,6 +2,7 @@ import { api } from '../api.js';
 import { icon } from '../icons.js';
 import { navigate } from '../router.js';
 import { isStale, setPage } from '../shell.js';
+import { can, currentUser } from '../session.js';
 import { createStepGrid, importListsInto } from '../stepgrid.js';
 import {
   confirmDialog, emptyState, errorState, esc, formatBytes, formatDateTime,
@@ -71,7 +72,7 @@ async function renderIndex(root, ctx) {
   setPage({
     ...meta,
     actions: `
-      <button class="btn" id="cfg">${icon('settings', 16)}Cấu hình số phiếu</button>
+      <button class="btn" id="cfg" data-perm="quan_tri">${icon('settings', 16)}Cấu hình số phiếu</button>
       <a class="btn btn-accent" href="#/phieu-thao-tac/moi">${icon('plus', 16)}LẬP PHIẾU</a>`,
   });
   root.innerHTML = `
@@ -357,10 +358,13 @@ async function renderNew(root, ctx) {
   if (ctx.query.mau) {
     try { template = await api.get(`${API}/mau/${ctx.query.mau}`); } catch { template = null; }
   }
+  const me = currentUser();
   const draft = {
     kind: 'ke_hoach', name: template?.name || '', purpose: template?.purpose || '',
     conditions: template?.conditions || '', notes: template?.notes || '',
-    planned_start: nowLocal(), issuing_unit: cfg.issuing_unit, people: {},
+    planned_start: nowLocal(), issuing_unit: cfg.issuing_unit,
+    // Người viết phiếu mặc định là người đang đăng nhập.
+    people: me ? { viet: { name: me.full_name, title: me.title || me.role_label } } : {},
   };
 
   root.innerHTML = `
@@ -417,7 +421,7 @@ async function renderNew(root, ctx) {
     if (!last) { toast('Chưa có phiếu nào để lấy lại', 'info'); return; }
     const p = last.people || {};
     const set = (key, part, v) => { const el = qs(`[data-person="${key}"][data-part="${part}"]`, root); if (el && v) el.value = v; };
-    [['viet', p.viet], ['duyet', p.duyet], ['giam_sat.0', p.giam_sat?.[0]], ['giam_sat.1', p.giam_sat?.[1]],
+    [...(me ? [] : [['viet', p.viet]]), ['duyet', p.duyet], ['giam_sat.0', p.giam_sat?.[0]], ['giam_sat.1', p.giam_sat?.[1]],
       ['thao_tac.0', p.thao_tac?.[0]], ['thao_tac.1', p.thao_tac?.[1]]].forEach(([k, v]) => { set(k, 'name', v?.name); set(k, 'title', v?.title); });
     toast(`Đã lấy người từ phiếu ${last.code}. Kiểm tra lại kíp trực.`, 'success');
   });
@@ -455,10 +459,12 @@ async function renderTicket(root, id, { keepScroll = false } = {}) {
   const closed = ['hoan_thanh', 'huy'].includes(t.status);
   const actions = [];
   if (editable) actions.push(`<button class="btn btn-sm btn-primary" data-act="save">${icon('check', 15)}Lưu</button>`,
-    `<button class="btn btn-sm btn-accent" data-act="duyet">${icon('check', 15)}Duyệt phiếu</button>`);
+    `<button class="btn btn-sm btn-accent" data-act="duyet" data-perm="duyet">${icon('check', 15)}Duyệt phiếu</button>`);
   if (t.status === 'da_duyet') actions.push(`<button class="btn btn-sm btn-accent" data-act="tiep-nhan">${icon('check', 15)}Tiếp nhận phiếu</button>`);
   if (t.status === 'dang_thuc_hien') actions.push(`<button class="btn btn-sm btn-accent" data-act="hoan-thanh">${icon('check', 15)}Hoàn thành phiếu</button>`);
-  if (!closed) actions.push(`<button class="btn btn-sm btn-danger" data-act="huy">Huỷ phiếu</button>`);
+  // Người lập tự huỷ phiếu mới lập của mình; còn lại cần quyền duyệt (Trưởng ca).
+  const canCancel = can('duyet') || (t.status === 'moi_lap' && t.created_by_id === currentUser()?.id);
+  if (!closed && canCancel) actions.push(`<button class="btn btn-sm btn-danger" data-act="huy">Huỷ phiếu</button>`);
 
   setPage({
     title: `Phiếu thao tác số ${t.code}`,
@@ -470,16 +476,17 @@ async function renderTicket(root, id, { keepScroll = false } = {}) {
       ${actions.join('')}`,
   });
 
-  const stamp = (label, v) => (v ? `${esc(label)} lúc ${esc(viTime(v))}` : '');
+  // Tài khoản đã bấm nút (khác tên người ký gõ trên phiếu) — để truy lại khi cần.
+  const stamp = (label, v, by = '') => (v ? `${esc(label)} lúc ${esc(viTime(v))}${by ? ` · tài khoản ${esc(by)}` : ''}` : '');
   const stamps = {
-    viet: stamp('Lập phiếu', t.created_at),
-    duyet: stamp('Đã duyệt', t.approved_at),
+    viet: stamp('Lập phiếu', t.created_at, t.created_by),
+    duyet: stamp('Đã duyệt', t.approved_at, t.approved_by),
     exec: [stamp('Tiếp nhận phiếu', t.received_at), stamp('Hoàn thành phiếu', t.completed_at)].filter(Boolean).join('<br>'),
   };
   const done = t.steps.filter((s) => s.done).length;
 
   root.innerHTML = `
-    ${t.status === 'huy' ? `<div class="callout callout-danger" style="margin-bottom:14px">Phiếu đã huỷ${t.cancel_reason ? `: ${esc(t.cancel_reason)}` : ''}.
+    ${t.status === 'huy' ? `<div class="callout callout-danger" style="margin-bottom:14px">Phiếu đã huỷ${t.cancelled_by ? ` (${esc(t.cancelled_by)})` : ''}${t.cancel_reason ? `: ${esc(t.cancel_reason)}` : ''}.
       Số ${esc(t.code)} giữ nguyên trong sổ, không cấp lại cho phiếu khác.</div>` : ''}
     ${!editable && !closed ? `<div class="callout callout-info" style="margin-bottom:14px">Phiếu đã duyệt: nội dung được giữ nguyên.
       Vận hành viên tích từng bước ngay khi thực hiện xong; ghi sự kiện bất thường ở cuối phiếu.</div>` : ''}
@@ -622,7 +629,7 @@ function renderChecklist(box, t, running, onChange) {
         <td class="step-text" style="white-space:pre-wrap;line-height:1.55">${esc(s.content)}</td>
         <td style="text-align:center">
           <input type="checkbox" data-step="${s.id}" data-i="${i}" ${s.done ? 'checked' : ''} ${running ? '' : 'disabled'}
-                 title="${s.done_at ? `Tích lúc ${esc(s.done_at.slice(11, 16))} ${esc(s.done_at.slice(8, 10))}/${esc(s.done_at.slice(5, 7))}` : ''}"
+                 title="${s.done_at ? `Tích lúc ${esc(s.done_at.slice(11, 16))} ${esc(s.done_at.slice(8, 10))}/${esc(s.done_at.slice(5, 7))}${s.done_by ? ` — ${esc(s.done_by)}` : ''}` : ''}"
                  style="width:20px;height:20px;cursor:${running ? 'pointer' : 'default'}"></td>
         <td style="text-align:center" ${i === 0 ? 'id="t-start"' : ''}>${i === 0 ? esc(times.start) : ''}</td>
         <td style="text-align:center" ${i === last ? 'id="t-end"' : ''}>${i === last ? esc(times.end) : ''}</td>
@@ -663,7 +670,7 @@ function renderChecklist(box, t, running, onChange) {
       row.classList.toggle('done', Boolean(step.done));
       row.querySelector('[data-cmd]').textContent = step.done ? shortName(step.commander) : '';
       row.querySelector('[data-rcv]').textContent = step.done ? shortName(step.receiver) : '';
-      cb.title = step.done_at ? `Tích lúc ${step.done_at.slice(11, 16)}` : '';
+      cb.title = step.done_at ? `Tích lúc ${step.done_at.slice(11, 16)}${step.done_by ? ` — ${step.done_by}` : ''}` : '';
       const tm = stepTimes(updated.steps);
       qs('#t-start', box).textContent = tm.start;
       qs('#t-end', box).textContent = tm.end;

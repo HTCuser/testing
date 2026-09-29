@@ -1,6 +1,7 @@
 import { api } from '../api.js';
 import { icon } from '../icons.js';
 import { navigate } from '../router.js';
+import { can, currentUser } from '../session.js';
 import { isStale, setPage } from '../shell.js';
 import {
   confirmDialog, emptyState, errorState, esc, formatDateTime, loading, qs, qsa, toast,
@@ -157,13 +158,15 @@ export function createJournalPage({ kind, basePath, title, subtitle, addLabel, p
     }
     if (isStale(root)) return;
 
+    // Sửa, xoá: người ghi, Trưởng ca, Quản trị (máy chủ cũng kiểm lại).
+    const mine = it.created_by_id == null || it.created_by_id === currentUser()?.id || can('duyet') || can('quan_tri');
     setPage({
       title: it.title,
-      subtitle: `${title} · ${viTime(it.started_at)}`,
+      subtitle: `${title} · ${viTime(it.started_at)}${it.created_by ? ` · ghi bởi ${it.created_by}` : ''}`,
       actions: `
         <a class="btn btn-sm" href="#${basePath}">${icon('chevronLeft', 15)}${esc(title)}</a>
-        <a class="btn btn-sm" href="#${basePath}/${id}/sua">${icon('edit', 15)}Sửa</a>
-        <button class="btn btn-sm btn-danger" id="del">${icon('trash', 15)}Xoá</button>`,
+        ${mine ? `<a class="btn btn-sm" href="#${basePath}/${id}/sua">${icon('edit', 15)}Sửa</a>
+        <button class="btn btn-sm btn-danger" id="del">${icon('trash', 15)}Xoá</button>` : ''}`,
     });
 
     const block = (key) => (it[key] && L[key] ? `
@@ -197,7 +200,7 @@ export function createJournalPage({ kind, basePath, title, subtitle, addLabel, p
         </section>
       </div>`;
 
-    qs('#del').addEventListener('click', async () => {
+    qs('#del')?.addEventListener('click', async () => {
       const ok = await confirmDialog('Xoá bản ghi này? Trợ lý sẽ không tra cứu được nó nữa.', { title: 'Xoá bản ghi' });
       if (!ok) return;
       try {

@@ -96,6 +96,15 @@ CHUNK_OVERLAP = int(_env("CHUNK_OVERLAP", "150") or 150)
 TOP_K = int(_env("TOP_K", "8") or 8)
 MAX_UPLOAD_MB = int(_env("MAX_UPLOAD_MB", "50") or 50)
 
+# Đăng nhập: phiên hết hạn khi không dùng quá chừng này giờ (một ca trực có dư).
+SESSION_IDLE_HOURS = float(_env("SESSION_IDLE_HOURS", "12") or 12)
+
+# Sao lưu. Nên đặt ra ổ khác ổ cài phần mềm (VD D:\\SaoLuu-HuaNa) để hỏng ổ
+# không mất cả dữ liệu lẫn bản sao.
+BACKUP_DIR = Path(_env("SAO_LUU_DIR") or (BASE_DIR / "sao-luu"))
+BACKUP_KEEP_DAYS = int(_env("SAO_LUU_GIU_NGAY", "30") or 30)
+LOG_DIR = DATA_DIR / "logs"
+
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md", ".xlsx", ".csv"}
 
 for _d in (DATA_DIR, UPLOAD_DIR, INDEX_DIR, TICKET_TEMPLATE_DIR, TICKET_DIR, PTT_FILE_DIR):

@@ -29,6 +29,10 @@ async function request(method, path, { json, form, query } = {}) {
   }
   if (!res.ok) {
     const detail = data && typeof data === 'object' ? data.detail : data;
+    if (res.status === 401 && !path.startsWith('/api/auth/')) {
+      // Phiên hết hạn hoặc bị quản trị khoá: app.js hiện lại màn hình đăng nhập.
+      window.dispatchEvent(new CustomEvent('huana:auth-required'));
+    }
     throw new Error(formatDetail(detail) || `Lỗi ${res.status}`);
   }
   return data;
@@ -53,6 +57,11 @@ export const api = {
   stats: () => request('GET', '/api/stats'),
   config: () => request('GET', '/api/config'),
   info: () => request('GET', '/api/thong-tin'),
+  authStatus: () => request('GET', '/api/auth/trang-thai'),
+  login: (payload) => request('POST', '/api/auth/dang-nhap', { json: payload }),
+  logout: () => request('POST', '/api/auth/dang-xuat', { json: {} }),
+  setup: (payload) => request('POST', '/api/auth/khoi-tao', { json: payload }),
+  changePassword: (payload) => request('POST', '/api/auth/doi-mat-khau', { json: payload }),
   reindexAll: () => request('POST', '/api/reindex'),
 
   ask: (payload) => request('POST', '/api/ask', { json: payload }),

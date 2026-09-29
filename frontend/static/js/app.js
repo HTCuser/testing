@@ -7,9 +7,12 @@ import * as incidents from './pages/incidents.js';
 import { createJournalPage } from './pages/journal.js';
 import { createLibraryPage } from './pages/library.js';
 import { createProceduresPage } from './pages/procedures.js';
+import { changePasswordDialog, renderLogin, renderOffline, renderSetup } from './login.js';
 import { setOrg } from './print.js';
+import { setSession } from './session.js';
 import * as ptt from './pages/ptt.js';
 import * as pttTemplates from './pages/ptt-templates.js';
+import * as admin from './pages/admin.js';
 import * as settings from './pages/settings.js';
 import { register, setNavigationHook, start } from './router.js';
 import { buildShell, highlightNav, resetView, setFooter, setPage } from './shell.js';
@@ -91,6 +94,7 @@ const PAGES = [
   ['/bieu-mau', forms],
   ['/bieu-mau/:id', forms],
   ['/cau-hinh', settings],
+  ['/quan-tri', admin],
 ];
 
 PAGES.forEach(([path, page]) => register(path, page));
@@ -120,27 +124,47 @@ setNavigationHook(async (location, found) => {
   }
 });
 
+let plantName = 'Nhà máy Thủy điện Hủa Na';
+let loginShown = false;
+
+function withTimeout(promise, ms) {
+  return Promise.race([promise, new Promise((_, reject) => { setTimeout(() => reject(new Error('timeout')), ms); })]);
+}
+
+// Phiên hết hạn giữa chừng (hoặc bị quản trị khoá): hiện màn hình đăng nhập.
+window.addEventListener('huana:auth-required', () => {
+  if (loginShown) return;
+  loginShown = true;
+  renderLogin(document.getElementById('root'), plantName, { expired: true });
+});
+
 async function boot() {
-  let plantName = 'Nhà máy Thủy điện Hủa Na';
+  const rootEl = document.getElementById('root');
+  let status = null;
+  let failure = '';
   try {
-    // Chỉ cần tên nhà máy để dựng khung; chờ tối đa 4 giây, máy chủ chậm thì
-    // vẫn mở giao diện, từng trang tự báo lỗi của nó.
-    const info = await Promise.race([
-      api.info(),
-      new Promise((_, reject) => { setTimeout(() => reject(new Error('timeout')), 4000); }),
-    ]);
+    // Chỉ cần tên nhà máy và người đăng nhập để dựng khung; chờ tối đa vài
+    // giây, máy chủ chậm thì báo ngay thay vì quay mãi.
+    const [info, st] = await Promise.all([withTimeout(api.info(), 6000), withTimeout(api.authStatus(), 6000)]);
     plantName = info.plant_name;
     setOrg(info.org_name, info.org_unit);
-  } catch {
-    // Máy chủ chưa sẵn sàng: vẫn dựng khung để hiển thị lỗi ở từng trang.
+    status = st;
+  } catch (err) {
+    failure = err.message === 'timeout' ? 'Máy chủ trả lời quá chậm.' : err.message;
   }
-
-  buildShell(document.getElementById('root'), plantName);
-  setFooter('Hệ thống tra cứu tài liệu kỹ thuật, quy trình vận hành và xử lý sự cố');
   // Giao diện đã dựng xong — báo cho đoạn kiểm tra trong index.html.
   window.__appStarted = true;
   try { sessionStorage.removeItem('huana-boot-retry'); } catch { /* không có sessionStorage */ }
+
+  if (!status) { renderOffline(rootEl, plantName, failure); return; }
+  if (status.needs_setup) { renderSetup(rootEl, plantName); return; }
+  if (!status.user) { loginShown = true; renderLogin(rootEl, plantName); return; }
+
+  setSession(status);
+  buildShell(rootEl, plantName, status.user);
+  setFooter('Hệ thống tra cứu tài liệu kỹ thuật, quy trình vận hành và xử lý sự cố');
   start();
+  if (status.user.must_change) changePasswordDialog({ forced: true });
 }
 
 boot();

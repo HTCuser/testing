@@ -1,6 +1,7 @@
 import { api } from '../api.js';
 import { icon } from '../icons.js';
 import { navigate } from '../router.js';
+import { can } from '../session.js';
 import { isStale, setPage } from '../shell.js';
 import {
   confirmDialog, emptyState, errorState, esc, formatBytes, formatDateTime,
@@ -72,7 +73,7 @@ async function render(root, ctx, group) {
   setPage({
     title: group.title,
     subtitle: group.subtitle,
-    actions: `<button class="btn btn-accent" id="upload-btn">${icon('upload', 16)}TẢI TÀI LIỆU</button>`,
+    actions: `<button class="btn btn-accent" id="upload-btn" data-perm="tai_lieu">${icon('upload', 16)}TẢI TÀI LIỆU</button>`,
   });
   root.innerHTML = loading();
 
@@ -185,7 +186,7 @@ function docRow(item, base) {
       </div>
       <div class="row-side">
         <span class="badge ${cls}">${esc(label)}</span>
-        ${isFile ? `<button class="btn btn-icon btn-danger" data-delete="${item.id}"
+        ${isFile ? `<button class="btn btn-icon btn-danger" data-perm="tai_lieu" data-delete="${item.id}"
                       title="Xoá tài liệu">${icon('trash', 15)}</button>` : ''}
       </div>
     </a>`;
@@ -302,7 +303,7 @@ async function renderDetail(root, id) {
           ${icon('library', 15)}MỞ TÀI LIỆU</a>
         <a class="btn btn-sm" href="/api/documents/${id}/file?tai_ve=true">
           ${icon('download', 15)}Tải về</a>` : ''}
-      ${isFile ? `<button class="btn btn-sm" id="reindex">${icon('refresh', 15)}Nạp lại</button>` : ''}`,
+      ${isFile ? `<button class="btn btn-sm" id="reindex" data-perm="tai_lieu">${icon('refresh', 15)}Nạp lại</button>` : ''}`,
   });
 
   const [cls, label] = STATUS[doc.index_status] || STATUS.cho_xu_ly;
@@ -333,7 +334,7 @@ async function renderDetail(root, id) {
         <div class="card-head"><h2 class="card-title">Thông tin tài liệu</h2></div>
         <dl class="kv" style="grid-template-columns:130px 1fr">
           <dt>Trạng thái</dt><dd><span class="badge ${cls}">${esc(label)}</span></dd>
-          <dt>Phân loại</dt><dd>${isFile ? `<select class="select" id="doc-category" style="padding:4px 8px;font-size:13px"></select>` : esc(doc.category_label)}</dd>
+          <dt>Phân loại</dt><dd>${isFile ? `<select class="select" id="doc-category" style="padding:4px 8px;font-size:13px" ${can('tai_lieu') ? '' : 'disabled'}></select>` : esc(doc.category_label)}</dd>
           <dt>Nguồn</dt><dd>${isFile ? 'Tệp tải lên' : 'Sinh từ bản ghi nghiệp vụ'}</dd>
           ${doc.equipment_name ? `<dt>Thiết bị</dt><dd>${esc(doc.equipment_name)}</dd>` : ''}
           ${doc.filename ? `<dt>Tên tệp</dt><dd class="mono">${esc(doc.filename)}</dd>` : ''}
