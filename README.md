@@ -317,7 +317,7 @@ Tài liệu (.pdf .docx .xlsx .csv .txt .md)          Bản ghi nghiệp vụ
         └────────────────┬────────────────┘
                          ▼
              Hợp nhất xếp hạng (RRF)
-           + giới hạn 3 đoạn / tài liệu
+         + ưu tiên đúng số hiệu thiết bị được hỏi
                          ▼
               Claude sinh câu trả lời
               (ràng buộc chỉ dùng tài liệu)
@@ -327,6 +327,14 @@ Tài liệu (.pdf .docx .xlsx .csv .txt .md)          Bản ghi nghiệp vụ
 "so lệch". Chỉ lập chỉ mục từng âm tiết sẽ mất hết ngữ nghĩa. Hệ thống lập chỉ mục cả unigram và
 bigram âm tiết, đồng thời chuẩn hoá bỏ dấu nên vận hành viên gõ vội không dấu vẫn tìm đúng
 ("may cat dau cuc nhay do bao ve so lech" → ra đúng hồ sơ SC-02).
+
+**Đúng thiết bị theo số hiệu.** Quy trình thường có các mục gần như giống hệt nhau cho từng thiết
+bị cùng loại (máy cắt 901/902, tổ máy H1/H2). Từ khoá và vector ngữ nghĩa đều coi hai mục đó gần
+như một, nên hỏi "xử lý sự cố không cắt được máy cắt 901 khi dừng máy" từng ra mục của 902 chỉ vì
+mục đó trùng chữ "khi dừng máy". Nay số hiệu trong câu hỏi (901, H1, MC273, 231-3…) được tính
+nặng hơn; sau khi hợp nhất, đoạn có số hiệu đó (nhất là ở tiêu đề mục) được cộng điểm, đoạn chỉ nêu
+số hiệu "anh em" (chỉ khác chữ số cuối: 902, H2) bị trừ điểm; mô hình sinh câu trả lời cũng được
+nhắc không lấy trình tự của thiết bị khác số hiệu.
 
 **Ràng buộc an toàn khi sinh câu trả lời.** Prompt hệ thống buộc mô hình chỉ trả lời dựa trên tài
 liệu được cấp, không suy diễn thông số kỹ thuật hay trị số chỉnh định, phải nói rõ khi tài liệu

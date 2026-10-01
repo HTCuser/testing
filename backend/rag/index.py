@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from .. import config
 from ..db import query, query_one
 from . import embeddings, glossary
-from .textutils import snippet, tokenize
+from .textutils import normalize, snippet, tokenize
 
 K1 = 1.5
 B = 0.75
@@ -134,8 +134,10 @@ class HybridIndex:
         terms = tokenize(question)
         codes = glossary.expand_query(question, self._glossary)
         # Lặp mã hai lần: người hỏi đã gọi đúng một chức năng cụ thể, mã của nó
-        # phải nặng ký hơn các từ chung như "so lệch", "tác động".
-        return terms + codes * 2
+        # phải nặng ký hơn các từ chung như "so lệch", "tác động". Số hiệu thiết
+        # bị (901, H1, MC273...) cũng vậy: nó quyết định trả lời cho thiết bị nào.
+        idents = [t for ident in identifiers(question) for t in tokenize(ident) if "_" not in t]
+        return terms + codes * 2 + idents * 2
 
     # ------------------------------------------------------------------ tìm kiếm
 
@@ -180,6 +182,7 @@ class HybridIndex:
         semantic = self._vector_search(question, keep, top_k * CANDIDATE_FACTOR)
 
         fused = _reciprocal_rank_fusion(lexical, semantic)
+        fused = _prefer_asked_identifiers(fused, question, meta)
 
         def build(chunk_id: int, score: float) -> Hit:
             info = meta[chunk_id]
@@ -292,6 +295,68 @@ def _bm25(entries, terms, df, avg_len, keep) -> list[tuple[int, float]]:
             scored.append((entry.chunk_id, score))
     scored.sort(key=lambda x: x[1], reverse=True)
     return scored
+
+
+# Số hiệu thiết bị trong câu hỏi: 901, MC273, H1, T2, 231-3... Số thuần phải
+# có từ 3 chữ số (bỏ "10 phút", "cấp 2"); có chữ cái thì từ 2 ký tự.
+_IDENT_RE = re.compile(r"(?<![0-9a-z])[a-z]{0,4}\d+[a-z0-9]*(?:[-.]\d+[a-z]?)*(?![0-9a-z])")
+
+# Hệ số điểm sau hợp nhất: đoạn nêu đúng số hiệu được hỏi được ưu tiên; đoạn chỉ
+# nêu số hiệu "anh em" (902 khi hỏi 901) bị đẩy xuống.
+MATCH_BOOST = 1.25
+HEADING_BOOST = 1.5
+SIBLING_PENALTY = 0.4
+
+
+def identifiers(text: str) -> set[str]:
+    found = set()
+    for m in _IDENT_RE.finditer(normalize(text)):
+        ident = m.group(0)
+        if ident.isdigit() and len(ident) < 3:
+            continue
+        if len(ident) < 2:
+            continue
+        found.add(ident)
+    return found
+
+
+def _siblings(a: str, b: str) -> bool:
+    """Hai số hiệu cùng loại, chỉ khác chữ số cuối: 901/902, H1/H2, MC273/MC274,
+    231-3/231-1. Không coi 110kV/220kV hay 87T/87G là anh em (phần cuối không
+    phải chữ số; mã bảo vệ đã có bảng tên gọi riêng)."""
+    return (a != b and len(a) == len(b) and a[:-1] == b[:-1]
+            and a[-1].isdigit() and b[-1].isdigit())
+
+
+def _prefer_asked_identifiers(fused: list[tuple[int, float]], question: str,
+                              meta: dict[int, dict]) -> list[tuple[int, float]]:
+    """Hỏi máy cắt 901 thì đoạn về 901 phải đứng trước đoạn về 902.
+
+    Quy trình hay có các mục gần như giống hệt nhau cho từng thiết bị cùng loại
+    (máy cắt 901/902, tổ máy H1/H2). Cả từ khoá lẫn vector ngữ nghĩa đều coi hai
+    mục đó gần như một, và chỉ cần cách hỏi trùng chữ với mục 902 hơn một chút
+    là mục 902 lên đầu — trả lời sai thiết bị. Ở đây đoạn nêu đúng số hiệu được
+    hỏi được cộng điểm; đoạn chỉ nêu số hiệu khác cùng loại (mà không nêu số
+    hiệu được hỏi) bị trừ điểm. Đoạn không nêu số hiệu nào giữ nguyên.
+    """
+    asked = identifiers(question)
+    if not asked or not fused:
+        return fused
+    rescored = []
+    for chunk_id, score in fused:
+        info = meta.get(chunk_id) or {}
+        in_heading = identifiers(info.get("heading", ""))
+        present = in_heading | identifiers(info.get("text", ""))
+        if asked & in_heading:
+            # Mục riêng của đúng thiết bị được hỏi (tiêu đề mục nêu số hiệu).
+            score *= HEADING_BOOST
+        elif asked & present:
+            score *= MATCH_BOOST
+        elif any(_siblings(a, p) for a in asked for p in present):
+            score *= SIBLING_PENALTY
+        rescored.append((chunk_id, score))
+    rescored.sort(key=lambda x: x[1], reverse=True)
+    return rescored
 
 
 def _reciprocal_rank_fusion(*rankings: list[tuple[int, float]]) -> list[tuple[int, float]]:

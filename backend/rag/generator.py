@@ -7,7 +7,7 @@ nguồn, vẫn dùng được cho tra cứu nhanh mà không phụ thuộc dịc
 from __future__ import annotations
 
 from .. import config
-from .index import Hit, complete_record
+from .index import Hit, complete_record, identifiers
 
 SYSTEM_PROMPT = """Bạn là trợ lý kỹ thuật của Nhà máy Thủy điện Hủa Na, phục vụ vận hành viên, \
 kỹ thuật viên xử lý sự cố và thợ sửa chữa.
@@ -37,7 +37,15 @@ hiệu / cấp 2 cắt máy), SAU ĐÓ mới đến các nguyên tắc chung áp
 bảo vệ nội bộ cùng tác động / bảo vệ ngoài nội bộ tác động), phải trình bày ĐỦ TẤT CẢ các trường hợp, \
 mỗi trường hợp một mục mở đầu bằng điều kiện nhận biết. Không tự chọn một trường hợp: người vận hành \
 tại hiện trường mới là người xác định trường hợp nào đang xảy ra.
-11. Đây là công cụ tra cứu hỗ trợ. Khi câu trả lời liên quan tới thao tác trên thiết bị đang mang \
+11. Câu hỏi nêu số hiệu thiết bị (máy cắt 901, tổ máy H1, MBA T2, MC273, DCL 231-3…): chỉ dùng \
+các đoạn nói về ĐÚNG số hiệu đó. Quy trình thường có các mục gần như giống hệt nhau cho từng thiết \
+bị cùng loại (901/902, H1/H2, T1/T2) — tuyệt đối không lấy trình tự, thiết bị liên quan (máy cắt \
+phía cao áp, dao cách ly, tổ máy) của số hiệu khác để trả lời. Câu hỏi diễn đạt khác tiêu đề mục \
+(VD hỏi "xử lý sự cố không cắt được máy cắt 901" mà tài liệu ghi "tách máy cắt 901 khi máy cắt \
+không cắt được…") thì vẫn dùng mục của đúng số hiệu, nêu tên mục ở đầu câu trả lời. Nếu tài liệu \
+chỉ có mục cho thiết bị khác số hiệu, nói rõ: "Tài liệu không có mục riêng cho <số hiệu hỏi>, chỉ \
+có mục <tên mục> cho <số hiệu khác>", không tự đổi số hiệu.
+12. Đây là công cụ tra cứu hỗ trợ. Khi câu trả lời liên quan tới thao tác trên thiết bị đang mang \
 điện hoặc đang vận hành, kết thúc bằng một dòng nhắc thực hiện theo phiếu thao tác đã được duyệt \
 và mệnh lệnh của Trưởng ca."""
 
@@ -101,6 +109,15 @@ def answer(
         )
 
 
+def _identifier_note(question: str) -> str:
+    """Nhắc lại số hiệu thiết bị được hỏi ngay cạnh câu hỏi (nguyên tắc 11)."""
+    idents = sorted(i.upper() for i in identifiers(question))
+    if not idents:
+        return ""
+    return (f"\n(Số hiệu thiết bị trong câu hỏi: {', '.join(idents)} — chỉ dùng các mục nói về đúng "
+            "số hiệu này; không dùng mục của thiết bị khác số hiệu.)")
+
+
 def _with_claude(question: str, hits: list[Hit]) -> str:
     import anthropic
 
@@ -118,6 +135,7 @@ def _with_claude(question: str, hits: list[Hit]) -> str:
                 "content": (
                     f"<tai_lieu>\n{build_context(hits)}\n</tai_lieu>\n\n"
                     f"Câu hỏi của người dùng: {question}"
+                    + _identifier_note(question)
                 ),
             }
         ],
