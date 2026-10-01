@@ -209,6 +209,51 @@ class HybridIndex:
         # hạn đưa 10/10 câu hỏi vào top 8, giữ lại chỉ được 9/10.
         return [build(chunk_id, score) for chunk_id, score in fused[:top_k]]
 
+    def hit_from_chunk(self, chunk_id: int, score: float = 0.0) -> Hit | None:
+        info = self._meta.get(chunk_id)
+        if info is None:
+            return None
+        return Hit(
+            chunk_id=chunk_id, document_id=info["document_id"], doc_title=info["title"],
+            category=info["category"], source_kind=info["source_kind"], source_id=info["source_id"],
+            equipment_id=info["equipment_id"], equipment_name=info["equipment_name"], page=info["page"],
+            heading=info["heading"], text=info["text"], score=score, excerpt=snippet(info["text"], []),
+        )
+
+    def with_references(self, hits: list[Hit], max_refs: int = 3) -> list[Hit]:
+        """Thêm các mục được dẫn chiếu: "thực hiện theo các bước như mục 9.2.7".
+
+        Bản ghi xử lý sự cố hay chỉ ghi "theo mục X" thay vì chép lại các bước.
+        Không lấy kèm mục X thì mô hình chỉ còn đoán mục X nói gì — và đoán theo
+        số mục là sai khi tài liệu dẫn chiếu nhầm số (gặp thật: quy trình máy cắt
+        đầu cực ghi "mục 9.2.7 đối với MC 901" trong khi 9.2.7 là của MC 902).
+        Đưa đúng mục X vào để mô hình đối chiếu được tiêu đề với thiết bị.
+        """
+        self.ensure_ready()
+        have = {h.chunk_id for h in hits}
+        headed = {(h.document_id, _section_number(h.heading)) for h in hits}
+        refs: list[tuple[int, str]] = []
+        for h in hits:
+            for num in _REF_RE.findall(normalize(section_text(h))):
+                key = (h.document_id, num)
+                if key not in headed and key not in refs:
+                    refs.append(key)
+        extra: list[Hit] = []
+        for document_id, num in refs[:max_refs]:
+            row = query_one(
+                "SELECT id FROM chunks WHERE document_id = ? AND (heading = ? OR heading LIKE ? OR heading LIKE ?) "
+                "ORDER BY ord LIMIT 1",
+                (document_id, num, f"{num}.%", f"{num} %"),
+            )
+            if row is None or row["id"] in have:
+                continue
+            # "9.2.7.%" cũng khớp mục con 9.2.7.1 — chấp nhận: mục con nằm trong mục được dẫn chiếu.
+            hit = self.hit_from_chunk(row["id"])
+            if hit is not None:
+                extra.append(hit)
+                have.add(row["id"])
+        return hits + extra
+
     def _vector_search(self, question: str, keep, limit: int) -> list[tuple[int, float]]:
         if not config.embeddings_enabled():
             return []
@@ -233,6 +278,57 @@ _LABEL_LINE_RE = re.compile(r"^\[([^\]]{1,120})\]")
 
 def _is_continuation(line: str) -> bool:
     return bool(re.match(r"^\[[^\]]{1,120}\][^\n]{0,40}\(tiếp\)", line.strip()))
+
+
+_REF_RE = re.compile(r"\bmuc\s+(\d+(?:\.\d+)+)\b")
+_SECTION_NO_RE = re.compile(r"^(\d+(?:\.\d+)+)\.?(?:\s|$)")
+
+
+def _section_number(heading: str) -> str:
+    m = _SECTION_NO_RE.match((heading or "").strip())
+    return m.group(1) if m else ""
+
+
+def section_text(hit: Hit, max_chunks: int = 10) -> str:
+    """Toàn bộ mục đánh số chứa đoạn này (các đoạn liền nhau cùng tiêu đề mục).
+
+    Trình tự thao tác của một mục (VD 9.2.6, 40 bước) bị cắt thành nhiều đoạn
+    chỉ mục, truy hồi thường chỉ trúng vài đoạn giữa. Hỏi "các bước" mà chỉ đưa
+    mấy đoạn đó thì câu trả lời thiếu bước đầu, bước cuối. Chỉ áp dụng cho mục
+    có số (9.2.6...) — mục không số như "Xử lý sự cố" có thể dài cả chục trang.
+    """
+    if not _section_number(hit.heading):
+        return _with_unfinished_sentence(hit, complete_record(hit))
+    row = query_one("SELECT ord FROM chunks WHERE id = ?", (hit.chunk_id,))
+    if row is None:
+        return hit.text
+    rows = query(
+        "SELECT ord, heading, text FROM chunks WHERE document_id = ? AND ord BETWEEN ? AND ? ORDER BY ord",
+        (hit.document_id, row["ord"] - max_chunks, row["ord"] + max_chunks),
+    )
+    by_ord = {r["ord"]: r for r in rows}
+    lo = hi = row["ord"]
+    while lo - 1 in by_ord and by_ord[lo - 1]["heading"] == hit.heading and hi - lo + 1 < max_chunks:
+        lo -= 1
+    while hi + 1 in by_ord and by_ord[hi + 1]["heading"] == hit.heading and hi - lo + 1 < max_chunks:
+        hi += 1
+    if lo == hi:
+        return hit.text
+    return "\n".join(by_ord[o]["text"] for o in range(lo, hi + 1))
+
+
+_SENTENCE_END_RE = re.compile(r"[.:;!?)”\"…]\s*$")
+
+
+def _with_unfinished_sentence(hit: Hit, text: str) -> str:
+    """Đoạn dừng giữa câu (PDF sang trang giữa ô bảng: "...cô lập MCĐC theo" /
+    trang sau: "các bước như mục 9.2.7...") thì nối thêm đoạn kế tiếp."""
+    if _SENTENCE_END_RE.search(text):
+        return text
+    row = query_one(
+        "SELECT n.text FROM chunks c JOIN chunks n ON n.document_id = c.document_id AND n.ord = c.ord + 1 "
+        "WHERE c.id = ?", (hit.chunk_id,))
+    return f"{text}\n{row['text']}" if row else text
 
 
 def complete_record(hit: Hit, span: int = 2) -> str:

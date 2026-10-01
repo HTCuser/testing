@@ -336,6 +336,19 @@ nặng hơn; sau khi hợp nhất, đoạn có số hiệu đó (nhất là ở 
 số hiệu "anh em" (chỉ khác chữ số cuối: 902, H2) bị trừ điểm; mô hình sinh câu trả lời cũng được
 nhắc không lấy trình tự của thiết bị khác số hiệu.
 
+**Đọc PDF quy trình.** PDF mất cấu trúc bảng và tiêu đề, nên khi nạp PDF hệ thống: bỏ dòng đầu
+trang / chân trang lặp lại ở nhiều trang (tên công ty, mã hiệu, "Trang số: 12/124") — để lại thì
+dòng in hoa đó bị coi là tiêu đề mục mới, cắt rời các bước khỏi mục của chúng; bỏ trang mục lục;
+nối tiêu đề mục sang trang sau (các bước của mục 9.2.6 tràn sang 3–4 trang vẫn thuộc 9.2.6); không
+coi dòng bị ngắt giữa câu ("9.2.8 đối với MC 902.") là tiêu đề. Vẫn nên tải bản Word khi có thể.
+
+**Đưa trọn mục, kèm mục được dẫn chiếu.** Trúng một đoạn trong mục đánh số (9.2.6) thì mô hình
+được đọc trọn mục đó (đủ mọi bước). Đoạn ghi "thực hiện theo các bước như mục 9.2.7" thì lấy kèm
+mục 9.2.7, và mô hình phải đối chiếu tiêu đề mục được dẫn chiếu với thiết bị đang hỏi: quy trình
+máy cắt đầu cực HHC-VH-QT-18 ghi "mục 9.2.7 đối với MC 901 hoặc mục 9.2.8 đối với MC 902" trong
+khi 9.2.6 mới là của MC 901, 9.2.7 là của MC 902 — mô hình phải dùng mục đúng thiết bị và cảnh
+báo chỗ dẫn chiếu sai.
+
 **Ràng buộc an toàn khi sinh câu trả lời.** Prompt hệ thống buộc mô hình chỉ trả lời dựa trên tài
 liệu được cấp, không suy diễn thông số kỹ thuật hay trị số chỉnh định, phải nói rõ khi tài liệu
 không đủ căn cứ, và nhắc thực hiện theo phiếu thao tác đã duyệt cùng mệnh lệnh Trưởng ca khi câu hỏi

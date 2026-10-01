@@ -35,6 +35,13 @@ _HEADING_RE = re.compile(
 )
 
 
+# Đầu mục cấp 1 trong PDF xuất từ Word: "12.Xử lý sự cố:" — số dính liền chữ
+# hoa, ngắn, kết thúc bằng dấu hai chấm. Bước thao tác "3. Mỗi tủ gồm:" có dấu
+# cách sau số, "1.Nếu tổ máy..." không kết thúc bằng hai chấm.
+_TOP_SECTION_RE = re.compile(r"^\d{1,2}\.(?=[A-ZĐÀ-ỸÂĂÊÔƠƯ])[^\n]{2,70}:$")
+_NUMBERED_START_RE = re.compile(r"^\d+(?:\.\d+){1,3}[.)]?\s+(\w)")
+
+
 @dataclass
 class Chunk:
     ord: int
@@ -47,10 +54,21 @@ def _is_heading(line: str) -> bool:
     line = line.strip()
     if not line or len(line) > 140:
         return False
+    if _TOP_SECTION_RE.match(line):
+        return True
     if _HEADING_RE.match(line):
+        # PDF ngắt dòng giữa câu: "...theo mục 9.2.7 đối với MC 901 hoặc mục /
+        # 9.2.8 đối với MC 902." — dòng sau bắt đầu bằng số mục nhưng là phần
+        # cuối của câu. Tiêu đề mục thật viết hoa chữ đầu.
+        m = _NUMBERED_START_RE.match(line)
+        if m and m.group(1).islower():
+            return False
         return True
     letters = [c for c in line if c.isalpha()]
-    return len(letters) >= 6 and all(c.isupper() for c in letters)
+    # Dòng in hoa ("XỬ LÝ SỰ CỐ") là tiêu đề; nhưng ô bảng bị PDF tách dòng như
+    # "II MCĐC" (mục La Mã + địa điểm) thì không — coi nó là tiêu đề sẽ cắt rời
+    # các bước khỏi mục của chúng.
+    return len(letters) >= 8 and len(line.split()) >= 2 and all(c.isupper() for c in letters)
 
 
 def _is_record(text: str) -> bool:
@@ -65,10 +83,13 @@ def _clean_heading(line: str) -> str:
     return re.sub(r"^#{1,6}\s+", "", line.strip())
 
 
-def split_blocks(text: str) -> list[tuple[str, str]]:
-    """Gom văn bản thành các khối (tiêu đề của khối, nội dung khối)."""
+def split_blocks(text: str, heading: str = "") -> list[tuple[str, str]]:
+    """Gom văn bản thành các khối (tiêu đề của khối, nội dung khối).
+
+    heading: tiêu đề mục đang mở từ trang trước (PDF cắt đoạn theo từng trang;
+    các bước của một mục thường tràn sang trang sau).
+    """
     blocks: list[tuple[str, str]] = []
-    heading = ""
     buffer: list[str] = []
 
     def flush(current_heading: str) -> None:
@@ -88,7 +109,15 @@ def split_blocks(text: str) -> list[tuple[str, str]]:
     return blocks
 
 
-def chunk_text(text: str, page: int | None = None, start_ord: int = 0) -> list[Chunk]:
+def last_heading(text: str, heading: str = "") -> str:
+    """Tiêu đề mục còn mở ở cuối văn bản — để trang sau nối tiếp."""
+    for line in text.split("\n"):
+        if _is_heading(line):
+            heading = _clean_heading(line)
+    return heading
+
+
+def chunk_text(text: str, page: int | None = None, start_ord: int = 0, heading: str = "") -> list[Chunk]:
     chunks: list[Chunk] = []
     order = start_ord
     current = ""
@@ -99,7 +128,7 @@ def chunk_text(text: str, page: int | None = None, start_ord: int = 0) -> list[C
         chunks.append(Chunk(ord=order, page=page, heading=heading, text=body.strip()))
         order += 1
 
-    for heading, body in split_blocks(text):
+    for heading, body in split_blocks(text, heading):
         for unit in _split_oversized(body):
             if not current:
                 current, current_heading = unit, heading

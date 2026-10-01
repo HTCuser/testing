@@ -7,7 +7,7 @@ from .. import config
 from ..docview import warm as warm_view
 from ..db import execute, query, query_one, tx
 from . import embeddings
-from .chunking import chunk_text
+from .chunking import chunk_text, last_heading
 from .extract import extract
 from .index import index
 
@@ -18,9 +18,11 @@ def index_file(document_id: int, path: Path, *, embed: bool = True) -> tuple[int
     chunks = []
     order = 0
     n_chars = 0
+    heading = ""
     for page, text in sections:
         n_chars += len(text)
-        page_chunks = chunk_text(text, page=page, start_ord=order)
+        page_chunks = chunk_text(text, page=page, start_ord=order, heading=heading)
+        heading = last_heading(text, heading)
         chunks.extend(page_chunks)
         order += len(page_chunks)
 

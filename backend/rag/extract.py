@@ -29,16 +29,45 @@ def extract(path: Path) -> list[tuple[int | None, str]]:
     raise ExtractionError(f"Chưa hỗ trợ định dạng {suffix}")
 
 
+# Dòng mục lục: "9.2.6. Các bước tách máy cắt 901 ......... 81".
+_TOC_LINE_RE = re.compile(r"(?:\.{4,}|…{2,}|\.\s?\.\s?\.\s?\.)\s*\d{1,4}\s*$")
+
+
+def _page_furniture(pages: list[list[str]]) -> set[str]:
+    """Dòng đầu trang / chân trang lặp lại ở nhiều trang (tên công ty, tên quy
+    trình, mã hiệu, "Trang số: 12/124"...). So khớp sau khi thay chữ số bằng #
+    để "Trang số: 12/124" và "Trang số: 13/124" là một."""
+    if len(pages) < 3:
+        return set()
+    seen: dict[str, int] = {}
+    for lines in pages:
+        for key in {re.sub(r"\d+", "#", ln.strip()) for ln in lines if ln.strip()}:
+            seen[key] = seen.get(key, 0) + 1
+    limit = max(3, len(pages) * 0.4)
+    return {k for k, n in seen.items() if n >= limit}
+
+
 def _pdf(path: Path) -> list[tuple[int | None, str]]:
     from pypdf import PdfReader
 
     reader = PdfReader(str(path))
-    pages: list[tuple[int | None, str]] = []
-    for i, page in enumerate(reader.pages, start=1):
+    raw: list[list[str]] = []
+    for page in reader.pages:
         try:
-            text = clean_text(page.extract_text() or "")
+            raw.append(clean_text(page.extract_text() or "").split("\n"))
         except Exception:
-            text = ""
+            raw.append([])
+    # Bỏ đầu trang lặp lại và mục lục: để lại thì dòng "CÔNG TY CP ..." in hoa ở
+    # mỗi trang bị coi là tiêu đề mục mới, cắt rời các bước khỏi tiêu đề mục của
+    # chúng; còn trang mục lục chứa tên mọi mục nên câu hỏi nào cũng khớp nó.
+    furniture = _page_furniture(raw)
+    pages: list[tuple[int | None, str]] = []
+    for i, lines in enumerate(raw, start=1):
+        if sum(bool(_TOC_LINE_RE.search(ln)) for ln in lines) >= 5:
+            continue  # trang mục lục: cả trang chỉ là tên mục, kể cả dòng tên mục bị ngắt
+        kept = [ln for ln in lines
+                if re.sub(r"\d+", "#", ln.strip()) not in furniture and not _TOC_LINE_RE.search(ln)]
+        text = "\n".join(kept).strip()
         if text:
             pages.append((i, text))
     if not pages:
@@ -67,6 +96,8 @@ def _docx(path: Path) -> list[tuple[int | None, str]]:
             if not text:
                 continue
             style = (para.style.name or "").lower()
+            if style.startswith("toc") or _TOC_LINE_RE.search(text):
+                continue  # mục lục: lặp lại tên mọi mục, chỉ gây nhiễu khi tìm
             parts.append(f"\n## {text}\n" if style.startswith("heading") else text)
         elif tag == "tbl":
             rows = _render_table(Table(child, doc))

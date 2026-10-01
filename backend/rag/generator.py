@@ -7,7 +7,7 @@ nguồn, vẫn dùng được cho tra cứu nhanh mà không phụ thuộc dịc
 from __future__ import annotations
 
 from .. import config
-from .index import Hit, complete_record, identifiers
+from .index import Hit, identifiers, section_text
 
 SYSTEM_PROMPT = """Bạn là trợ lý kỹ thuật của Nhà máy Thủy điện Hủa Na, phục vụ vận hành viên, \
 kỹ thuật viên xử lý sự cố và thợ sửa chữa.
@@ -45,7 +45,14 @@ phía cao áp, dao cách ly, tổ máy) của số hiệu khác để trả lờ
 không cắt được…") thì vẫn dùng mục của đúng số hiệu, nêu tên mục ở đầu câu trả lời. Nếu tài liệu \
 chỉ có mục cho thiết bị khác số hiệu, nói rõ: "Tài liệu không có mục riêng cho <số hiệu hỏi>, chỉ \
 có mục <tên mục> cho <số hiệu khác>", không tự đổi số hiệu.
-12. Đây là công cụ tra cứu hỗ trợ. Khi câu trả lời liên quan tới thao tác trên thiết bị đang mang \
+12. Tài liệu có thể dẫn chiếu SAI số mục (VD ghi "thao tác theo mục 9.2.7 đối với MC 901" trong khi \
+tiêu đề mục 9.2.7 lại là "Các bước tách máy cắt 902…"). Khi đoạn tài liệu bảo "theo mục X", luôn \
+đối chiếu tiêu đề của mục X (xem "mục:" trong thuộc tính nguồn của từng đoạn) với thiết bị đang \
+hỏi. Nếu không khớp: dùng mục có tiêu đề nói ĐÚNG thiết bị đó, và mở đầu câu trả lời bằng cảnh báo \
+"⚠ Lưu ý: tài liệu ghi thực hiện theo mục X cho <thiết bị>, nhưng mục X là <tiêu đề mục X>. Trình \
+tự dưới đây theo mục Y (<tiêu đề mục Y>). Đề nghị kiểm tra, hiệu chỉnh lại quy trình." Không bao \
+giờ trình bày các bước của mục X sai thiết bị chỉ vì tài liệu dẫn chiếu tới nó.
+13. Đây là công cụ tra cứu hỗ trợ. Khi câu trả lời liên quan tới thao tác trên thiết bị đang mang \
 điện hoặc đang vận hành, kết thúc bằng một dòng nhắc thực hiện theo phiếu thao tác đã được duyệt \
 và mệnh lệnh của Trưởng ca."""
 
@@ -63,7 +70,8 @@ def build_context(hits: list[Hit]) -> str:
         # Hai nửa của một bản ghi thường cùng lọt top: sau khi ghép, đoạn sau
         # trùng hẳn đoạn trước. Giữ số hiệu (để trích dẫn khớp danh sách nguồn
         # trên giao diện) nhưng không gửi lặp nội dung.
-        lines = complete_record(hit).split("\n")
+        # Mục đánh số: đưa trọn mục (đủ mọi bước); còn lại: ghép bản ghi bị tách.
+        lines = section_text(hit).split("\n")
         fresh = [ln for ln in lines if ln not in sent]
         if not fresh:
             body = f"(cùng nội dung với đoạn [{sent[lines[0]]}])"

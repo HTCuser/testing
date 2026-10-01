@@ -41,6 +41,8 @@ def ask(payload: AskIn) -> dict:
         equipment_id=payload.equipment_id,
         source_kind=payload.source_kind or None,
     )
+    # Đoạn nào ghi "thực hiện theo mục 9.2.7" thì lấy kèm mục 9.2.7.
+    hits = index.with_references(hits)
     quota_reason = ""
     if hits and config.generation_enabled():
         _, quota_reason = usage.check()
