@@ -61,12 +61,26 @@ def _pdf(path: Path) -> list[tuple[int | None, str]]:
     # mỗi trang bị coi là tiêu đề mục mới, cắt rời các bước khỏi tiêu đề mục của
     # chúng; còn trang mục lục chứa tên mọi mục nên câu hỏi nào cũng khớp nó.
     furniture = _page_furniture(raw)
+    # Trang khổ ngang hay gộp các dòng đầu trang thành một ("CÔNG TY CP THỦY ĐIỆN
+    # HỦA NA" / "QUY TRÌNH VH&XLSC HỆ THỐNG VAN ĐĨA Mã hiệu:"): ở vài dòng đầu
+    # và cuối trang, dòng gồm toàn chữ của đầu trang cũng là đầu trang.
+    furniture_words = {w for line in furniture for w in line.lower().split() if w != "#"}
+
+    def is_furniture(line: str, pos: int, total: int) -> bool:
+        key = re.sub(r"\d+", "#", line.strip())
+        if key in furniture:
+            return True
+        if furniture_words and (pos < 6 or pos >= total - 4):
+            words = [w for w in key.lower().split() if w != "#"]
+            return bool(words) and sum(w in furniture_words for w in words) >= 0.85 * len(words)
+        return False
+
     pages: list[tuple[int | None, str]] = []
     for i, lines in enumerate(raw, start=1):
         if sum(bool(_TOC_LINE_RE.search(ln)) for ln in lines) >= 5:
             continue  # trang mục lục: cả trang chỉ là tên mục, kể cả dòng tên mục bị ngắt
-        kept = [ln for ln in lines
-                if re.sub(r"\d+", "#", ln.strip()) not in furniture and not _TOC_LINE_RE.search(ln)]
+        kept = [ln for pos, ln in enumerate(lines)
+                if not is_furniture(ln, pos, len(lines)) and not _TOC_LINE_RE.search(ln)]
         text = "\n".join(kept).strip()
         if text:
             pages.append((i, text))

@@ -399,9 +399,24 @@ _IDENT_RE = re.compile(r"(?<![0-9a-z])[a-z]{0,4}\d+[a-z0-9]*(?:[-.]\d+[a-z]?)*(?
 
 # Hệ số điểm sau hợp nhất: đoạn nêu đúng số hiệu được hỏi được ưu tiên; đoạn chỉ
 # nêu số hiệu "anh em" (902 khi hỏi 901) bị đẩy xuống.
-MATCH_BOOST = 1.25
-HEADING_BOOST = 1.5
+MATCH_BOOST = 1.1
+HEADING_BOOST = 1.2
 SIBLING_PENALTY = 0.4
+# Đoạn có dòng tên sự cố / tên mục khớp gần trọn câu hỏi ("Áp lực dầu cao
+# (> 185 Bar)" khi hỏi "xử lý ... khi áp lực dầu cao").
+TITLE_BOOST = 1.35
+# Câu hỏi gọi đúng tên hệ thống/thiết bị của một tài liệu ("van đĩa", "máy cắt
+# đầu cực"): ưu tiên các đoạn của tài liệu đó hơn đoạn cùng chủ đề ở tài liệu khác.
+DOC_BOOST = 1.3
+# Âm tiết của phần "khung" trong tên quy trình (Quy trình VH&XLSC hệ thống ...).
+_TITLE_FILLER = {"quy", "trinh", "vh", "xlsc", "bdsc", "he", "thong", "hhc", "qt", "hua", "na",
+                 "thuy", "dien", "cong", "ty"}
+# Cặp từ có trong tên hầu hết quy trình — không phân biệt được tài liệu nào.
+_GENERIC_PAIRS = {
+    "quy_trinh", "trinh_van", "van_hanh", "hanh_va", "va_xu", "xu_ly", "ly_su", "su_co",
+    "nha_may", "may_thuy", "thuy_dien", "dien_hua", "hua_na", "he_thong", "huong_dan",
+    "tai_lieu", "ky_thuat", "bao_duong", "duong_sua", "sua_chua", "cong_ty", "co_phan",
+}
 
 
 def identifiers(text: str) -> set[str]:
@@ -424,6 +439,44 @@ def _siblings(a: str, b: str) -> bool:
             and a[-1].isdigit() and b[-1].isdigit())
 
 
+def _word_bigrams(text: str) -> set[str]:
+    """Cặp âm tiết liền nhau, chỉ gồm chữ (bỏ số: "185 bar" không phải tên sự cố)."""
+    syls = [w for w in re.findall(r"[a-z]+|\d+", normalize(text))]
+    return {f"{a}_{b}" for a, b in zip(syls, syls[1:]) if a.isalpha() and b.isalpha()}
+
+
+_TITLE_LINE_RE = re.compile(r"^(?:[—\-•]\s*|\d{1,2}[.)]\s*|\[)?([^\n\]]{6,90})")
+
+
+_GENERIC_WORDS = {"xu", "ly", "su", "co", "cac", "buoc", "thao", "tac", "khi", "va", "cua", "trong", "thi"}
+
+
+def _has_matching_title(info: dict, wanted: set[str], wanted_words: set[str]) -> bool:
+    """Đoạn có dòng ngắn (tên sự cố trong bảng, nhãn bản ghi, tiêu đề mục) mà
+    gần như mọi cặp từ của nó đều có trong câu hỏi.
+
+    Bảng xử lý sự cố chung cho cả hai tổ máy không ghi "H1", "H2"; hỏi "van đĩa
+    H1 khi áp lực dầu cao" thì đoạn trúng tên sự cố "Áp lực dầu cao (> 185 Bar)"
+    phải thắng các đoạn chỉ có chữ "van đĩa H1".
+    """
+    lines = [info.get("heading", "")] + info.get("text", "").split("\n")[:80]
+    for line in lines:
+        m = _TITLE_LINE_RE.match(line.strip())
+        if not m or len(line) > 110:
+            continue
+        title = m.group(1)
+        pairs = _word_bigrams(title)
+        if len(pairs) >= 3 and len(pairs & wanted) >= 0.8 * len(pairs):
+            return True
+        # Hỏi "áp lực dầu ... tăng cao" vẫn khớp tên "Áp lực dầu cao": mọi âm tiết
+        # của tên có trong câu hỏi, và tên không chỉ toàn từ chung chung.
+        # Bỏ phần trong ngoặc (ngưỡng, đơn vị: "(> 185 Bar)") trước khi so.
+        words = set(re.findall(r"[a-z]+", normalize(re.sub(r"\([^)]*\)?", " ", title))))
+        if len(words) >= 3 and words <= wanted_words and words - _GENERIC_WORDS:
+            return True
+    return False
+
+
 def _prefer_asked_identifiers(fused: list[tuple[int, float]], question: str,
                               meta: dict[int, dict]) -> list[tuple[int, float]]:
     """Hỏi máy cắt 901 thì đoạn về 901 phải đứng trước đoạn về 902.
@@ -436,11 +489,31 @@ def _prefer_asked_identifiers(fused: list[tuple[int, float]], question: str,
     hiệu được hỏi) bị trừ điểm. Đoạn không nêu số hiệu nào giữ nguyên.
     """
     asked = identifiers(question)
-    if not asked or not fused:
+    wanted = _word_bigrams(question)
+    if not fused:
         return fused
+    distinctive = wanted - _GENERIC_PAIRS
+    wanted_words = set(re.findall(r"[a-z]+", normalize(question)))
+    doc_hit: dict[int, bool] = {}
     rescored = []
     for chunk_id, score in fused:
         info = meta.get(chunk_id) or {}
+        doc_id = info.get("document_id")
+        if doc_id not in doc_hit:
+            # Khớp từ 2 cụm ("máy cắt", "cắt đầu", "đầu cực") hoặc nửa tên riêng
+            # của tài liệu ("van đĩa" trong "hệ thống van đĩa"). Một cụm chung
+            # như "máy phát" có trong tên nhiều quy trình thì chưa đủ.
+            own = {pair for pair in _word_bigrams(info.get("title", "")) - _GENERIC_PAIRS
+                   if not set(pair.split("_")) & _TITLE_FILLER}
+            common = len(distinctive & own)
+            doc_hit[doc_id] = common >= 2 or (common >= 1 and common * 2 >= len(own))
+        if doc_hit[doc_id]:
+            score *= DOC_BOOST
+        if wanted and _has_matching_title(info, wanted, wanted_words):
+            score *= TITLE_BOOST
+        if not asked:
+            rescored.append((chunk_id, score))
+            continue
         in_heading = identifiers(info.get("heading", ""))
         present = in_heading | identifiers(info.get("text", ""))
         if asked & in_heading:

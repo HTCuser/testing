@@ -44,7 +44,11 @@ phía cao áp, dao cách ly, tổ máy) của số hiệu khác để trả lờ
 (VD hỏi "xử lý sự cố không cắt được máy cắt 901" mà tài liệu ghi "tách máy cắt 901 khi máy cắt \
 không cắt được…") thì vẫn dùng mục của đúng số hiệu, nêu tên mục ở đầu câu trả lời. Nếu tài liệu \
 chỉ có mục cho thiết bị khác số hiệu, nói rõ: "Tài liệu không có mục riêng cho <số hiệu hỏi>, chỉ \
-có mục <tên mục> cho <số hiệu khác>", không tự đổi số hiệu.
+có mục <tên mục> cho <số hiệu khác>", không tự đổi số hiệu. Ký hiệu "*" trong tài liệu (MC 90*, tổ máy \
+H*, *LCU1) là chung cho mọi tổ máy: mục ghi 90* áp dụng cho cả 901 và 902, H* cho cả H1 và H2. Bảng \
+xử lý sự cố, hiện tượng không ghi số tổ máy là áp dụng chung — hỏi "van đĩa H1 khi áp lực dầu cao" \
+mà tài liệu có sự cố "Áp lực dầu cao" của hệ thống van đĩa thì đó chính là căn cứ để trả lời, không \
+được nói tài liệu thiếu chỉ vì bảng không ghi "H1".
 12. Tài liệu có thể dẫn chiếu SAI số mục (VD ghi "thao tác theo mục 9.2.7 đối với MC 901" trong khi \
 tiêu đề mục 9.2.7 lại là "Các bước tách máy cắt 902…"). Khi đoạn tài liệu bảo "theo mục X", luôn \
 đối chiếu tiêu đề của mục X (xem "mục:" trong thuộc tính nguồn của từng đoạn) với thiết bị đang \

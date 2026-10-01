@@ -349,6 +349,12 @@ máy cắt đầu cực HHC-VH-QT-18 ghi "mục 9.2.7 đối với MC 901 hoặc
 khi 9.2.6 mới là của MC 901, 9.2.7 là của MC 902 — mô hình phải dùng mục đúng thiết bị và cảnh
 báo chỗ dẫn chiếu sai.
 
+**Tên sự cố, tên hệ thống trong câu hỏi.** Sau khi hợp nhất xếp hạng còn hai điều chỉnh: đoạn
+có dòng tên sự cố / tên mục khớp gần trọn câu hỏi ("Áp lực dầu cao (> 185 Bar)" khi hỏi "...khi
+áp lực dầu cao") được cộng điểm; câu hỏi gọi đúng tên hệ thống của một tài liệu ("van đĩa",
+"máy cắt đầu cực") thì đoạn của tài liệu đó được ưu tiên hơn đoạn cùng chủ đề ở tài liệu khác. Số
+hiệu tổ máy (H1) chỉ cộng nhẹ: bảng xử lý sự cố thường chung cho mọi tổ máy và không ghi "H1".
+
 **Ràng buộc an toàn khi sinh câu trả lời.** Prompt hệ thống buộc mô hình chỉ trả lời dựa trên tài
 liệu được cấp, không suy diễn thông số kỹ thuật hay trị số chỉnh định, phải nói rõ khi tài liệu
 không đủ căn cứ, và nhắc thực hiện theo phiếu thao tác đã duyệt cùng mệnh lệnh Trưởng ca khi câu hỏi
